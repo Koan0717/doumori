@@ -1,0 +1,50 @@
+import { REST, Routes } from "discord.js";
+import dotenv from "dotenv";
+import { command as fishCmd } from "../commands/fish.js";
+import { command as bugCmd } from "../commands/bug.js";
+import { command as shopCmd } from "../commands/shop.js";
+import { command as fishbookCmd } from "../commands/fishbook.js";
+import { command as bugbookCmd } from "../commands/bugbook.js";
+import { command as exchangeCmd } from "../commands/exchange.js";
+import { command as sellCmd } from "../commands/sell.js";
+import { command as profileCmd } from "../commands/profile.js";
+import { command as leaderboardCmd } from "../commands/leaderboard.js";
+
+dotenv.config();
+
+const commands = [
+  fishCmd.data.toJSON(),
+  bugCmd.data.toJSON(),
+  shopCmd.data.toJSON(),
+  fishbookCmd.data.toJSON(),
+  bugbookCmd.data.toJSON(),
+  exchangeCmd.data.toJSON(),
+  sellCmd.data.toJSON(),
+  profileCmd.data.toJSON(),
+  leaderboardCmd.data.toJSON(),
+];
+
+const token = process.env.DISCORD_BOT_TOKEN;
+const clientId = process.env.DISCORD_CLIENT_ID;
+
+if (!token || !clientId) {
+  console.error("❌ DISCORD_BOT_TOKEN または DISCORD_CLIENT_ID が設定されていません。");
+  process.exit(1);
+}
+
+const rest = new REST({ version: "10" }).setToken(token);
+
+export async function deployCommands() {
+  try {
+    console.log(`🚀 ${commands.length} 個のスラッシュコマンドをデプロイ中...`);
+    await rest.put(Routes.applicationCommands(clientId), { body: commands });
+    console.log("✅ スラッシュコマンドのデプロイが完了しました！");
+  } catch (error) {
+    console.error("❌ スラッシュコマンドデプロイエラー:", error);
+  }
+}
+
+// 直接実行された場合
+if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
+  deployCommands();
+}

@@ -1,0 +1,19 @@
+{
+  "name": "doumori-bot",
+  "version": "1.0.0",
+  "description": "Discord Animal Forest style Bot with Supabase and Manybot currency integration",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/utils/deployCommands.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.48.1",
+    "discord.js": "^14.17.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}
