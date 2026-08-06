@@ -11,7 +11,7 @@ import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("profile")
+    .setName("プロフィール")
     .setDescription("自分の図鑑収集状況・チケット・所持アイテムを確認します📊")
     .addUserOption((option) =>
       option
@@ -26,7 +26,7 @@ export const command = {
     }
 
     const guildId = interaction.guild.id;
-    const targetUser = interaction.options.getUser("user") || interaction.user;
+    const targetUser = (interaction.options && interaction.options.getUser("user")) || interaction.user;
     const userId = targetUser.id;
 
     const userData = await getUser(guildId, userId);

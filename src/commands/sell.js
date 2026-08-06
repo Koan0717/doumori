@@ -7,7 +7,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("sell")
+    .setName("売却")
     .setDescription("重複した生き物（2匹目以降）を売却して 通貨 に換金します💰"),
 
   async execute(interaction) {
@@ -27,7 +27,7 @@ export const command = {
     if (res.rows.length === 0) {
       const emptyEmbed = createBaseEmbed(
         "💰 たぬき売却処 - 売却アイテムなし",
-        "売却できる重複した生き物（2匹以上捕まえた生き物）がありません！\n`/fish` や `/bug` でたくさん採集しましょう！",
+        "売却できる重複した生き物（2匹以上捕まえた生き物）がありません！\n`/釣り` や `/虫捕り` でたくさん採集しましょう！",
         "#E74C3C"
       );
       await interaction.followUp({ embeds: [emptyEmbed] });

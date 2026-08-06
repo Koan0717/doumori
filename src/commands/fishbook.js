@@ -11,7 +11,7 @@ import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("fishbook")
+    .setName("魚図鑑")
     .setDescription("魚図鑑と図鑑達成率を確認します🐟"),
 
   async execute(interaction) {

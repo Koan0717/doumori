@@ -7,7 +7,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("bug")
+    .setName("虫捕り")
     .setDescription("虫取り網を1つ消費して虫を捕まえます🦋"),
 
   async execute(interaction) {
@@ -23,7 +23,7 @@ export const command = {
     if (netCount <= 0) {
       const noItemEmbed = createBaseEmbed(
         "🦋 虫取り網がありません！",
-        "虫を捕まえるには **虫取り網** が必要です。\n`/shop` コマンドで図鑑チケットを使って虫取り網を交換してください！",
+        "虫を捕まえるには **虫取り網** が必要です。\n`/ショップ` コマンド（または操作パネル）で図鑑チケットを使って虫取り網を交換してください！",
         "#E74C3C"
       );
       await interaction.followUp({ embeds: [noItemEmbed] });

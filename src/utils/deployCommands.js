@@ -9,6 +9,8 @@ import { command as exchangeCmd } from "../commands/exchange.js";
 import { command as sellCmd } from "../commands/sell.js";
 import { command as profileCmd } from "../commands/profile.js";
 import { command as leaderboardCmd } from "../commands/leaderboard.js";
+import { command as helpCmd } from "../commands/help.js";
+import { command as panelCmd } from "../commands/panel.js";
 
 dotenv.config();
 
@@ -22,6 +24,8 @@ const commands = [
   sellCmd.data.toJSON(),
   profileCmd.data.toJSON(),
   leaderboardCmd.data.toJSON(),
+  helpCmd.data.toJSON(),
+  panelCmd.data.toJSON(),
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

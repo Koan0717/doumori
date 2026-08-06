@@ -7,7 +7,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("fish")
+    .setName("釣り")
     .setDescription("つりざおを1つ消費して魚を釣ります🎣"),
 
   async execute(interaction) {
@@ -23,7 +23,7 @@ export const command = {
     if (rodCount <= 0) {
       const noItemEmbed = createBaseEmbed(
         "🎣 つりざおがありません！",
-        "魚を釣るには **つりざお** が必要です。\n`/shop` コマンドで図鑑チケットを使ってつりざおを交換してください！",
+        "魚を釣るには **つりざお** が必要です。\n`/ショップ` コマンド（または操作パネル）で図鑑チケットを使ってつりざおを交換してください！",
         "#E74C3C"
       );
       await interaction.followUp({ embeds: [noItemEmbed] });

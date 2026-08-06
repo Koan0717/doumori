@@ -5,13 +5,13 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("exchange")
+    .setName("両替")
     .setDescription("通貨と図鑑チケットを交換・相互両替します🔀")
     .addStringOption((option) =>
       option
         .setName("action")
         .setDescription("両替の方向を選択してください")
-        .setRequired(true)
+        .setRequired(false)
         .addChoices(
           { name: "🪙 通貨 ➔ 🎫 図鑑チケット (500通貨で1枚)", value: "to_ticket" },
           { name: "🎫 図鑑チケット ➔ 🪙 通貨 (1枚で500通貨)", value: "to_coin" }
@@ -32,8 +32,8 @@ export const command = {
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const action = interaction.options.getString("action");
-    const amount = interaction.options.getInteger("amount") || 1;
+    const action = interaction.options ? (interaction.options.getString("action") || "to_ticket") : "to_ticket";
+    const amount = interaction.options ? (interaction.options.getInteger("amount") || 1) : 1;
 
     const rate = CONFIG.EXCHANGE_RATES.MANYBOT_PER_TICKET; // 500
     const manybotBalance = await getManybotBalance(guildId, userId);

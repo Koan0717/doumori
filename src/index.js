@@ -15,6 +15,8 @@ import { command as exchangeCmd } from "./commands/exchange.js";
 import { command as sellCmd } from "./commands/sell.js";
 import { command as profileCmd } from "./commands/profile.js";
 import { command as leaderboardCmd } from "./commands/leaderboard.js";
+import { command as helpCmd } from "./commands/help.js";
+import { command as panelCmd } from "./commands/panel.js";
 
 dotenv.config();
 
@@ -52,11 +54,27 @@ const commandList = [
   sellCmd,
   profileCmd,
   leaderboardCmd,
+  helpCmd,
+  panelCmd,
 ];
 
 commandList.forEach((cmd) => {
   client.commands.set(cmd.data.name, cmd);
 });
+
+// ボタンID ➔ コマンドのマッピング
+const buttonCommandMap = {
+  btn_fish: fishCmd,
+  btn_bug: bugCmd,
+  btn_shop: shopCmd,
+  btn_fishbook: fishbookCmd,
+  btn_bugbook: bugbookCmd,
+  btn_exchange: exchangeCmd,
+  btn_sell: sellCmd,
+  btn_profile: profileCmd,
+  btn_leaderboard: leaderboardCmd,
+  btn_help: helpCmd,
+};
 
 // 3. イベントハンドラー
 client.on("clientReady", async () => {
@@ -68,28 +86,52 @@ client.on("clientReady", async () => {
   }
 });
 
-// スラッシュコマンド実行の受付
+// インタラクション受付 (スラッシュコマンド ＆ パネルボタン)
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  // A. スラッシュコマンド実行
+  if (interaction.isChatInputCommand()) {
+    const cmd = client.commands.get(interaction.commandName);
+    if (!cmd) return;
 
-  const cmd = client.commands.get(interaction.commandName);
-  if (!cmd) return;
-
-  try {
-    if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply().catch(() => {});
+    try {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply().catch(() => {});
+      }
+      await cmd.execute(interaction);
+    } catch (error) {
+      console.error(`❌ コマンド実行エラー [/${interaction.commandName}]:`, error);
+      const replyPayload = {
+        content: `❌ コマンドの処理中にエラーが発生しました: \`${error.message || error}\``,
+        ephemeral: true,
+      };
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(replyPayload).catch(() => {});
+      } else {
+        await interaction.reply(replyPayload).catch(() => {});
+      }
     }
-    await cmd.execute(interaction);
-  } catch (error) {
-    console.error(`❌ コマンド実行中にエラーが発生しました [/${interaction.commandName}]:`, error);
-    const replyPayload = {
-      content: `❌ コマンドの処理中にエラーが発生しました: \`${error.message || error}\``,
-      ephemeral: true,
-    };
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp(replyPayload).catch(() => {});
-    } else {
-      await interaction.reply(replyPayload).catch(() => {});
+  }
+  // B. パネルボタンクリックの実行
+  else if (interaction.isButton() && interaction.customId.startsWith("btn_")) {
+    const targetCmd = buttonCommandMap[interaction.customId];
+    if (!targetCmd) return;
+
+    try {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: false }).catch(() => {});
+      }
+      await targetCmd.execute(interaction);
+    } catch (error) {
+      console.error(`❌ パネルボタン実行エラー [${interaction.customId}]:`, error);
+      const replyPayload = {
+        content: `❌ 操作処理中にエラーが発生しました: \`${error.message || error}\``,
+        ephemeral: true,
+      };
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(replyPayload).catch(() => {});
+      } else {
+        await interaction.reply(replyPayload).catch(() => {});
+      }
     }
   }
 });

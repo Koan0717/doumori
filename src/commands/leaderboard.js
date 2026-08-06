@@ -6,7 +6,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("leaderboard")
+    .setName("ランキング")
     .setDescription("サーバー内の図鑑完成率ランキングを表示します🏆"),
 
   async execute(interaction) {

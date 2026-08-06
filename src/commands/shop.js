@@ -10,7 +10,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
-    .setName("shop")
+    .setName("ショップ")
     .setDescription("図鑑チケットを使って道具（つりざお・虫取り網）を交換します🏪"),
 
   async execute(interaction) {
