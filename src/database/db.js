@@ -114,12 +114,16 @@ export async function initDatabase() {
         tc_level INTEGER DEFAULT 1,
         vc_xp INTEGER DEFAULT 0,
         vc_level INTEGER DEFAULT 1,
+        evaluation_vc_time INTEGER DEFAULT 0,
+        initial_issued BOOLEAN DEFAULT FALSE,
+        event_points INTEGER DEFAULT 0,
         PRIMARY KEY (guild_id, user_id)
       );
     `);
 
-    // manybotが必要とする欠落カラムの安全補強 (ALTER TABLE)
+    // manybotが必要とするすべての欠落カラムの安全補強 (ALTER TABLE)
     const columnsToEnsure = [
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS guild_id BIGINT",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS balance INTEGER DEFAULT 0",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily TIMESTAMP",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS chinchiro_count INTEGER DEFAULT 0",
@@ -129,13 +133,16 @@ export async function initDatabase() {
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS tc_level INTEGER DEFAULT 1",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS vc_xp INTEGER DEFAULT 0",
       "ALTER TABLE users ADD COLUMN IF NOT EXISTS vc_level INTEGER DEFAULT 1",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS evaluation_vc_time INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS initial_issued BOOLEAN DEFAULT FALSE",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS event_points INTEGER DEFAULT 0",
     ];
 
     for (const colQuery of columnsToEnsure) {
       await mbClient.query(colQuery).catch((err) => console.warn(`Migration warning: ${err.message}`));
     }
 
-    console.log("✅ manybot データベース（usersテーブル・全カラム）の確認・補強が完了しました。");
+    console.log("✅ manybot データベース（usersテーブル・完全全カラム）の確認・補強が完了しました。");
   } catch (err) {
     console.error("❌ manybot DB初期化確認エラー:", err);
   } finally {
