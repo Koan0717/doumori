@@ -1,5 +1,6 @@
 import pg from "pg";
 import dotenv from "dotenv";
+import { CONFIG } from "../config.js";
 
 dotenv.config();
 
@@ -88,7 +89,33 @@ export async function initDatabase() {
       );
     `);
 
-    console.log("✅ doumori データベーススキーマの初期化が完了しました。");
+    // 4. マイルポイント＆ランクテーブル
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_miles (
+        guild_id BIGINT,
+        user_id BIGINT,
+        miles INTEGER DEFAULT 0,
+        rank_level INTEGER DEFAULT 1,
+        last_diy_at TIMESTAMP,
+        PRIMARY KEY (guild_id, user_id)
+      );
+    `);
+
+    // 5. デイリーミッションテーブル
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_daily_missions (
+        guild_id BIGINT,
+        user_id BIGINT,
+        date_key TEXT,
+        mission_desc TEXT,
+        reward_miles INTEGER DEFAULT 30,
+        status TEXT DEFAULT 'pending',
+        proof_url TEXT,
+        PRIMARY KEY (guild_id, user_id, date_key)
+      );
+    `);
+
+    console.log("✅ doumori データベーススキーマ（マイル＆ミッション含む）の初期化が完了しました。");
   } catch (error) {
     console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
@@ -166,6 +193,134 @@ export async function getUser(guildId, userId) {
     return insertRes.rows[0];
   }
   return res.rows[0];
+}
+
+/**
+ * マイルポイント & ランクデータの取得または初期化
+ */
+export async function getUserMiles(guildId, userId) {
+  const res = await doumoriPool.query(
+    "SELECT * FROM doumori_miles WHERE guild_id = $1 AND user_id = $2",
+    [guildId, userId]
+  );
+  if (res.rows.length === 0) {
+    const insertRes = await doumoriPool.query(
+      "INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level) VALUES ($1, $2, 0, 1) RETURNING *",
+      [guildId, userId]
+    );
+    return insertRes.rows[0];
+  }
+  return res.rows[0];
+}
+
+/**
+ * マイルポイントの加算/消費
+ */
+export async function addMiles(guildId, userId, amount) {
+  const res = await doumoriPool.query(
+    `INSERT INTO doumori_miles (guild_id, user_id, miles)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (guild_id, user_id)
+     DO UPDATE SET miles = doumori_miles.miles + $3
+     RETURNING miles`,
+    [guildId, userId, amount]
+  );
+  return res.rows[0].miles;
+}
+
+/**
+ * ランクレベルの設定
+ */
+export async function setRankLevel(guildId, userId, newRankLevel) {
+  await doumoriPool.query(
+    `INSERT INTO doumori_miles (guild_id, user_id, rank_level)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (guild_id, user_id)
+     DO UPDATE SET rank_level = $3`,
+    [guildId, userId, newRankLevel]
+  );
+}
+
+/**
+ * DIY作業台（イベント）最終実行日時の更新
+ */
+export async function updateLastDiyAt(guildId, userId) {
+  await doumoriPool.query(
+    `INSERT INTO doumori_miles (guild_id, user_id, last_diy_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (guild_id, user_id)
+     DO UPDATE SET last_diy_at = CURRENT_TIMESTAMP`,
+    [guildId, userId]
+  );
+}
+
+/**
+ * デイリーミッションの取得または自動生成
+ */
+export async function getOrCreateDailyMission(guildId, userId, rankLevel) {
+  // 本日の日付キー (JST: YYYY-MM-DD)
+  const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
+
+  const res = await doumoriPool.query(
+    "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
+    [guildId, userId, todayStr]
+  );
+
+  if (res.rows.length > 0) {
+    return res.rows[0];
+  }
+
+  // ランクに応じたミッションリストからランダム抽選
+  const templates = CONFIG.DAILY_MISSIONS[rankLevel] || CONFIG.DAILY_MISSIONS[1];
+  const selected = templates[Math.floor(Math.random() * templates.length)];
+
+  const insertRes = await doumoriPool.query(
+    `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_desc, reward_miles, status)
+     VALUES ($1, $2, $3, $4, $5, 'pending')
+     RETURNING *`,
+    [guildId, userId, todayStr, selected.desc, selected.miles]
+  );
+
+  return insertRes.rows[0];
+}
+
+/**
+ * デイリーミッションの報告送信
+ */
+export async function submitMissionReport(guildId, userId, dateKey, proofUrl) {
+  await doumoriPool.query(
+    `UPDATE doumori_daily_missions
+     SET status = 'submitted', proof_url = $1
+     WHERE guild_id = $2 AND user_id = $3 AND date_key = $4`,
+    [proofUrl, guildId, userId, dateKey]
+  );
+}
+
+/**
+ * デイリーミッションの承認 ＆ マイル付与
+ */
+export async function approveMissionReport(guildId, userId, dateKey) {
+  const res = await doumoriPool.query(
+    "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
+    [guildId, userId, dateKey]
+  );
+
+  if (res.rows.length === 0 || res.rows[0].status === "approved") {
+    return null;
+  }
+
+  const mission = res.rows[0];
+
+  // ステータスを達成済みに更新
+  await doumoriPool.query(
+    "UPDATE doumori_daily_missions SET status = 'approved' WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
+    [guildId, userId, dateKey]
+  );
+
+  // 報酬マイルを加算
+  const newMiles = await addMiles(guildId, userId, mission.reward_miles);
+
+  return { rewardMiles: mission.reward_miles, newMiles };
 }
 
 /**

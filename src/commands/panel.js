@@ -10,7 +10,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("パネル設置")
-    .setDescription("このチャンネルに全機能がボタン操作できる【操作パネル】を設置します🎮")
+    .setDescription("このチャンネルに全機能がボタン操作できる【総合操作パネル】を設置します🎮")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
   async execute(interaction) {
@@ -20,7 +20,7 @@ export const command = {
 
     const embed = createBaseEmbed(
       "🍃 どうぶつの森林 - 総合操作パネル",
-      "下のボタンを押すだけで、釣りや虫捕り、ショップ、図鑑確認などの全機能が手軽に使えます！",
+      "下のボタンを押すだけで、採集・図鑑・マイルポイント・ランクアップなどの全機能が手軽に使えます！",
       "#2ECC71"
     );
 
@@ -33,14 +33,22 @@ export const command = {
         inline: false,
       },
       {
+        name: "🌟 📅 🛠️ ⬆️ マイル＆ステップアップランク",
+        value: "・**【マイル確認】**: 現在のマイルとランク状態を確認\n" +
+               "・**【ミッション】**: 今日のランク別デイリーミッションを確認\n" +
+               "・**【DIY作業台】**: 週1回のイベント開催告知でマイル獲得\n" +
+               "・**【ランクアップ】**: マイルを消費して次のランクに昇格！",
+        inline: false,
+      },
+      {
         name: "📖 🔀 💰 図鑑・両替・売却",
         value: "・**【魚図鑑】/【虫図鑑】**: 各図鑑と完成率を確認\n" +
-               "・**【両替】**: 所持通貨 ⇄ 図鑑チケット の相互交換\n" +
+               "・**【両替】**: 所持通貨 ⇄ 図鑑チケット の相互両替\n" +
                "・**【ダブり売却】**: 重複した生き物をまとめて換金",
         inline: false,
       },
       {
-        name: "📊 🏆 ❓ プロフィール・ランキング",
+        name: "📊 🏆 ❓ プロフィール・ランキング・ヘルプ",
         value: "・**【プロフィール】**: 自分の持ち物や完成率を確認\n" +
                "・**【ランキング】**: サーバー内完成率 Top 10\n" +
                "・**【ヘルプ】**: 遊び方ガイドパネルを表示",
@@ -55,16 +63,24 @@ export const command = {
       new ButtonBuilder().setCustomId("btn_shop").setLabel("🏪 タヌキショップ").setStyle(ButtonStyle.Secondary)
     );
 
-    // 行2: 図鑑・両替・売却
+    // 行2: マイル & ランクアップ
     const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("btn_miles").setLabel("🌟 マイル確認").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("btn_mission").setLabel("📅 ミッション").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("btn_diy").setLabel("🛠️ DIY作業台").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("btn_rankup").setLabel("⬆️ ランクアップ").setStyle(ButtonStyle.Danger)
+    );
+
+    // 行3: 図鑑・両替・売却
+    const row3 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_fishbook").setLabel("📖 魚図鑑").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_bugbook").setLabel("📖 虫図鑑").setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId("btn_exchange").setLabel("🔀 通貨両替").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_sell").setLabel("💰 ダブり売却").setStyle(ButtonStyle.Danger)
     );
 
-    // 行3: プロフィール・ランキング・ヘルプ
-    const row3 = new ActionRowBuilder().addComponents(
+    // 行4: プロフィール・ランキング・ヘルプ
+    const row4 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_profile").setLabel("📊 プロフィール").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_leaderboard").setLabel("🏆 ランキング").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_help").setLabel("❓ ヘルプ").setStyle(ButtonStyle.Secondary)
@@ -73,11 +89,11 @@ export const command = {
     // チャンネルへパネルを送信
     await interaction.channel.send({
       embeds: [embed],
-      components: [row1, row2, row3],
+      components: [row1, row2, row3, row4],
     });
 
     await interaction.followUp({
-      content: "✅ チャンネルに【操作パネル】を設置しました！",
+      content: "✅ チャンネルに【総合操作パネル】を設置しました！",
       ephemeral: true,
     });
   },

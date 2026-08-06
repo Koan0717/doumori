@@ -11,6 +11,11 @@ import { command as profileCmd } from "../commands/profile.js";
 import { command as leaderboardCmd } from "../commands/leaderboard.js";
 import { command as helpCmd } from "../commands/help.js";
 import { command as panelCmd } from "../commands/panel.js";
+import { command as milesCmd } from "../commands/miles.js";
+import { command as missionCmd } from "../commands/mission.js";
+import { command as missionReportCmd } from "../commands/missionReport.js";
+import { command as diyCmd } from "../commands/diy.js";
+import { command as rankupCmd } from "../commands/rankup.js";
 
 dotenv.config();
 
@@ -26,6 +31,11 @@ const commands = [
   leaderboardCmd.data.toJSON(),
   helpCmd.data.toJSON(),
   panelCmd.data.toJSON(),
+  milesCmd.data.toJSON(),
+  missionCmd.data.toJSON(),
+  missionReportCmd.data.toJSON(),
+  diyCmd.data.toJSON(),
+  rankupCmd.data.toJSON(),
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

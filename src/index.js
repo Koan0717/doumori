@@ -17,6 +17,11 @@ import { command as profileCmd } from "./commands/profile.js";
 import { command as leaderboardCmd } from "./commands/leaderboard.js";
 import { command as helpCmd } from "./commands/help.js";
 import { command as panelCmd } from "./commands/panel.js";
+import { command as milesCmd } from "./commands/miles.js";
+import { command as missionCmd } from "./commands/mission.js";
+import { command as missionReportCmd } from "./commands/missionReport.js";
+import { command as diyCmd } from "./commands/diy.js";
+import { command as rankupCmd } from "./commands/rankup.js";
 
 dotenv.config();
 
@@ -56,6 +61,11 @@ const commandList = [
   leaderboardCmd,
   helpCmd,
   panelCmd,
+  milesCmd,
+  missionCmd,
+  missionReportCmd,
+  diyCmd,
+  rankupCmd,
 ];
 
 commandList.forEach((cmd) => {
@@ -74,6 +84,10 @@ const buttonCommandMap = {
   btn_profile: profileCmd,
   btn_leaderboard: leaderboardCmd,
   btn_help: helpCmd,
+  btn_miles: milesCmd,
+  btn_mission: missionCmd,
+  btn_diy: diyCmd,
+  btn_rankup: rankupCmd,
 };
 
 // 3. イベントハンドラー
