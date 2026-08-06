@@ -12,7 +12,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply();
+      await interaction.deferReply().catch(() => {});
     }
 
     const guildId = interaction.guild.id;
@@ -26,7 +26,7 @@ export const command = {
         "魚を釣るには **つりざお** が必要です。\n`/shop` コマンドで図鑑チケットを使ってつりざおを交換してください！",
         "#E74C3C"
       );
-      await interaction.followup.send({ embeds: [noItemEmbed] });
+      await interaction.followUp({ embeds: [noItemEmbed] });
       return;
     }
 
@@ -103,7 +103,7 @@ export const command = {
       extraMsg = `\n\n🏆 **【コンプリート達成！】** 魚図鑑をすべて埋めました！限定ロール **「${roleResult.roleName}」** を付与しました！`;
     }
 
-    await interaction.followup.send({
+    await interaction.followUp({
       content: `${interaction.user.mention} さんの釣果です！${extraMsg}`,
       embeds: [embed],
     });
