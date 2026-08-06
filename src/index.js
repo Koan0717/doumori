@@ -64,7 +64,7 @@ client.once("ready", async () => {
   
   // スラッシュコマンド自動登録
   if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_BOT_TOKEN) {
-    await deployCommands();
+    await deployCommands().catch((err) => console.error("❌ Command deploy error:", err));
   }
 });
 
@@ -76,14 +76,18 @@ client.on("interactionCreate", async (interaction) => {
   if (!cmd) return;
 
   try {
+    // 3秒ルールのタイムアウトを防止するため、即座に deferReply を実行
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
     await cmd.execute(interaction);
   } catch (error) {
     console.error(`❌ コマンド実行エラー [/${interaction.commandName}]:`, error);
     const replyPayload = {
-      content: "コマンドの実行中にエラーが発生しました。",
+      content: "コマンドの実行中にエラーが発生しました。ログをご確認ください。",
       ephemeral: true,
     };
-    if (interaction.replied || interaction.deferred) {
+    if (interaction.deferred || interaction.replied) {
       await interaction.followup(replyPayload).catch(() => {});
     } else {
       await interaction.reply(replyPayload).catch(() => {});
@@ -93,19 +97,19 @@ client.on("interactionCreate", async (interaction) => {
 
 // VC監視 (チケット付与)
 client.on("voiceStateUpdate", async (oldState, newState) => {
-  await handleVoiceStateUpdate(oldState, newState);
+  await handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("❌ VC tracker error:", err));
 });
 
 // チャット監視 (チケット付与)
 client.on("messageCreate", async (message) => {
-  await handleMessageCreate(message);
+  await handleMessageCreate(message).catch((err) => console.error("❌ Chat tracker error:", err));
 });
 
 // 4. メイン起動
 async function startBot() {
   // DB初期化
-  if (process.env.DATABASE_URL) {
-    await initDatabase();
+  if (process.env.DATABASE_URL || process.env.DOUMORI_DATABASE_URL) {
+    await initDatabase().catch((err) => console.error("❌ DB Init error:", err));
   }
 
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -114,7 +118,7 @@ async function startBot() {
     return;
   }
 
-  await client.login(token);
+  await client.login(token).catch((err) => console.error("❌ Discord Login Error:", err));
 }
 
 startBot();

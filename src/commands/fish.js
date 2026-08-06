@@ -11,7 +11,9 @@ export const command = {
     .setDescription("つりざおを1つ消費して魚を釣ります🎣"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply();
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
