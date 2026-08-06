@@ -26,7 +26,9 @@ export const command = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -46,7 +48,7 @@ export const command = {
           `チケット **${amount}** 枚と交換するには **${requiredCoins}** コインが必要です。\n（現在の所持コイン: **${manybotBalance}** コイン）`,
           "#E74C3C"
         );
-        await interaction.followup.send({ embeds: [errorEmbed] });
+        await interaction.followUp({ embeds: [errorEmbed] });
         return;
       }
 
@@ -66,7 +68,7 @@ export const command = {
         { name: "🪙 manybot残高", value: `**${newBalance}** コイン`, inline: true }
       );
 
-      await interaction.followup.send({ embeds: [embed] });
+      await interaction.followUp({ embeds: [embed] });
     } else if (action === "to_coin") {
       if (userData.tickets < amount) {
         const errorEmbed = createBaseEmbed(
@@ -74,7 +76,7 @@ export const command = {
           `両替に必要な図鑑チケットが不足しています。\n（所持チケット: **${userData.tickets}** 枚 / 必要: **${amount}** 枚）`,
           "#E74C3C"
         );
-        await interaction.followup.send({ embeds: [errorEmbed] });
+        await interaction.followUp({ embeds: [errorEmbed] });
         return;
       }
 
@@ -98,7 +100,7 @@ export const command = {
         { name: "🪙 manybot残高", value: `**${newBalance}** コイン`, inline: true }
       );
 
-      await interaction.followup.send({ embeds: [embed] });
+      await interaction.followUp({ embeds: [embed] });
     }
   },
 };

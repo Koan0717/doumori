@@ -11,7 +11,9 @@ export const command = {
     .setDescription("虫取り網を1つ消費して虫を捕まえます🦋"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -24,7 +26,7 @@ export const command = {
         "虫を捕まえるには **虫取り網** が必要です。\n`/shop` コマンドで図鑑チケットを使って虫取り網を交換してください！",
         "#E74C3C"
       );
-      await interaction.followup.send({ embeds: [noItemEmbed] });
+      await interaction.followUp({ embeds: [noItemEmbed] });
       return;
     }
 
@@ -101,7 +103,7 @@ export const command = {
       extraMsg = `\n\n🏆 **【コンプリート達成！】** 虫図鑑をすべて埋めました！限定ロール **「${roleResult.roleName}」** を付与しました！`;
     }
 
-    await interaction.followup.send({
+    await interaction.followUp({
       content: `${interaction.user.mention} さんの成果です！${extraMsg}`,
       embeds: [embed],
     });

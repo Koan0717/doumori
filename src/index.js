@@ -59,7 +59,7 @@ commandList.forEach((cmd) => {
 });
 
 // 3. イベントハンドラー
-client.once("ready", async () => {
+client.on("clientReady", async () => {
   console.log(`🟢 Botがログインしました: ${client.user.tag}`);
   
   // スラッシュコマンド自動登録
@@ -76,19 +76,18 @@ client.on("interactionCreate", async (interaction) => {
   if (!cmd) return;
 
   try {
-    // 3秒ルールのタイムアウトを防止するため、即座に deferReply を実行
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply().catch(() => {});
     }
     await cmd.execute(interaction);
   } catch (error) {
-    console.error(`❌ コマンド実行エラー [/${interaction.commandName}]:`, error);
+    console.error(`❌ コマンド実行中にエラーが発生しました [/${interaction.commandName}]:`, error);
     const replyPayload = {
-      content: "コマンドの実行中にエラーが発生しました。ログをご確認ください。",
+      content: `❌ コマンドの処理中にエラーが発生しました: \`${error.message || error}\``,
       ephemeral: true,
     };
     if (interaction.deferred || interaction.replied) {
-      await interaction.followup(replyPayload).catch(() => {});
+      await interaction.followUp(replyPayload).catch(() => {});
     } else {
       await interaction.reply(replyPayload).catch(() => {});
     }

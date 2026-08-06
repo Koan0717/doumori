@@ -15,16 +15,31 @@ if (!doumoriDbUrl) {
   console.warn("⚠️ DOUMORI_DATABASE_URL (または DATABASE_URL) が設定されていません。");
 }
 
+const getSslOption = (url) => {
+  if (!url) return false;
+  // SupabaseやクラウドPostgreSQLの場合はSSL有効化
+  if (url.includes("supabase") || url.includes("postgres.database.azure.com") || url.includes("render.com") || url.includes("neon.tech")) {
+    return { rejectUnauthorized: false };
+  }
+  return false;
+};
+
 export const doumoriPool = new Pool({
   connectionString: doumoriDbUrl,
-  ssl: doumoriDbUrl && doumoriDbUrl.includes("supabase") ? { rejectUnauthorized: false } : false,
+  ssl: getSslOption(doumoriDbUrl),
+  connectionTimeoutMillis: 8000,
+  idleTimeoutMillis: 30000,
+  max: 10,
 });
 
 // Manybot DB接続 (設定されている場合のみ分離接続)
 export const manybotPool = manybotDbUrl
   ? new Pool({
       connectionString: manybotDbUrl,
-      ssl: manybotDbUrl.includes("supabase") ? { rejectUnauthorized: false } : false,
+      ssl: getSslOption(manybotDbUrl),
+      connectionTimeoutMillis: 8000,
+      idleTimeoutMillis: 30000,
+      max: 10,
     })
   : doumoriPool;
 
@@ -32,8 +47,9 @@ export const manybotPool = manybotDbUrl
  * データベースのテーブルスキーマを自動作成・初期化
  */
 export async function initDatabase() {
-  const client = await doumoriPool.connect();
+  let client;
   try {
+    client = await doumoriPool.connect();
     // 1. どうぶつの森Bot専用ユーザーデータ
     await client.query(`
       CREATE TABLE IF NOT EXISTS doumori_users (
@@ -77,12 +93,13 @@ export async function initDatabase() {
   } catch (error) {
     console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 
   // Manybot DB側にも users テーブルの確保 (フォールバック時含む)
+  let mbClient;
   try {
-    const mbClient = await manybotPool.connect();
+    mbClient = await manybotPool.connect();
     await mbClient.query(`
       CREATE TABLE IF NOT EXISTS users (
         guild_id BIGINT,
@@ -91,10 +108,11 @@ export async function initDatabase() {
         PRIMARY KEY (guild_id, user_id)
       );
     `);
-    mbClient.release();
     console.log("✅ manybot データベース接続・確認が完了しました。");
   } catch (err) {
     console.error("❌ manybot DB初期化確認エラー:", err);
+  } finally {
+    if (mbClient) mbClient.release();
   }
 }
 

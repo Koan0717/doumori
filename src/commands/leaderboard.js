@@ -10,7 +10,9 @@ export const command = {
     .setDescription("サーバー内の図鑑完成率ランキングを表示します🏆"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const totalTypes = FISH_LIST.length + BUG_LIST.length; // 40
@@ -39,6 +41,6 @@ export const command = {
       embed.setDescription(descText);
     }
 
-    await interaction.followup.send({ embeds: [embed] });
+    await interaction.followUp({ embeds: [embed] });
   },
 };

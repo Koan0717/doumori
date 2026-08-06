@@ -15,7 +15,9 @@ export const command = {
     .setDescription("虫図鑑と図鑑達成率を確認します🦋"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -83,7 +85,7 @@ export const command = {
       );
     };
 
-    const replyMsg = await interaction.followup.send({
+    const replyMsg = await interaction.followUp({
       embeds: [generatePageEmbed(currentPage)],
       components: totalPages > 1 ? [getButtons(currentPage)] : [],
     });

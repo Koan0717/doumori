@@ -14,7 +14,9 @@ export const command = {
     .setDescription("図鑑チケットを使って道具（つりざお・虫取り網）を交換します🏪"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -48,7 +50,7 @@ export const command = {
         .setDisabled(userData.tickets < 1)
     );
 
-    const replyMsg = await interaction.followup.send({
+    const replyMsg = await interaction.followUp({
       embeds: [embed],
       components: [row],
     });
@@ -69,7 +71,7 @@ export const command = {
       // 最新のチケット数を再取得
       const currentMember = await getUser(guildId, userId);
       if (currentMember.tickets < 1) {
-        await i.followup({ content: "図鑑チケットが不足しています！", ephemeral: true });
+        await i.followUp({ content: "図鑑チケットが不足しています！", ephemeral: true });
         return;
       }
 

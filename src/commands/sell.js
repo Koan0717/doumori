@@ -11,7 +11,9 @@ export const command = {
     .setDescription("重複した生き物（2匹目以降）を売却して manybot コインに換金します💰"),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
@@ -28,7 +30,7 @@ export const command = {
         "売却できる重複した生き物（2匹以上捕まえた生き物）がありません！\n`/fish` や `/bug` でたくさん採集しましょう！",
         "#E74C3C"
       );
-      await interaction.followup.send({ embeds: [emptyEmbed] });
+      await interaction.followUp({ embeds: [emptyEmbed] });
       return;
     }
 
@@ -76,6 +78,6 @@ export const command = {
       inline: false,
     });
 
-    await interaction.followup.send({ embeds: [embed] });
+    await interaction.followUp({ embeds: [embed] });
   },
 };

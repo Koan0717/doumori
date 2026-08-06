@@ -12,10 +12,18 @@ import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("profile")
-    .setDescription("自分の図鑑収集状況・チケット・所持アイテムを確認します📊"),
+    .setDescription("自分の図鑑収集状況・チケット・所持アイテムを確認します📊")
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("確認したいユーザー（省略時は自分）")
+        .setRequired(false)
+    ),
 
   async execute(interaction) {
-    await interaction.deferReply();
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply().catch(() => {});
+    }
 
     const guildId = interaction.guild.id;
     const targetUser = interaction.options.getUser("user") || interaction.user;
@@ -51,6 +59,6 @@ export const command = {
       { name: "🦋 虫図鑑達成率", value: bugProgress, inline: false }
     );
 
-    await interaction.followup.send({ embeds: [embed] });
+    await interaction.followUp({ embeds: [embed] });
   },
 };
