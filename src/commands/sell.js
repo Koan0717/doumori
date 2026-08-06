@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { CONFIG } from "../config.js";
 import { FISH_LIST } from "../data/fish.js";
 import { BUG_LIST } from "../data/bugs.js";
-import { pool, addManybotBalance, getManybotBalance } from "../database/db.js";
+import { doumoriPool, addManybotBalance, getManybotBalance } from "../database/db.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
@@ -17,7 +17,7 @@ export const command = {
     const userId = interaction.user.id;
 
     // 捕獲数が2以上の生き物を取得
-    const res = await pool.query(
+    const res = await doumoriPool.query(
       "SELECT * FROM doumori_collection WHERE guild_id = $1 AND user_id = $2 AND count > 1",
       [guildId, userId]
     );
@@ -54,7 +54,7 @@ export const command = {
       soldCount += excessCount;
 
       // カウントを 1 に更新
-      await pool.query(
+      await doumoriPool.query(
         "UPDATE doumori_collection SET count = 1 WHERE guild_id = $1 AND user_id = $2 AND category = $3 AND creature_id = $4",
         [guildId, userId, row.category, row.creature_id]
       );
