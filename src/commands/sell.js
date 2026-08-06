@@ -8,7 +8,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("sell")
-    .setDescription("重複した生き物（2匹目以降）を売却して manybot コインに換金します💰"),
+    .setDescription("重複した生き物（2匹目以降）を売却して 通貨 に換金します💰"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
@@ -62,19 +62,19 @@ export const command = {
       );
     }
 
-    // manybot コインを加算
+    // 通貨を加算
     await addManybotBalance(guildId, userId, totalEarnedCoins);
     const newBalance = await getManybotBalance(guildId, userId);
 
     const embed = createBaseEmbed(
       "💰 たぬき売却処 - 売却完了！",
-      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedCoins}** manybotコイン を手に入れました！`,
+      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedCoins}** 通貨 を手に入れました！`,
       "#F1C40F"
     );
 
     embed.addFields({
-      name: "🪙 manybot現在の残高",
-      value: `**${newBalance}** コイン`,
+      name: "🪙 通貨残高",
+      value: `**${newBalance}** 通貨`,
       inline: false,
     });
 

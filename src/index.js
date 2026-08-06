@@ -23,7 +23,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.get("/", (req, res) => {
-  res.send("🍃 あつまれ どうぶつの森 Bot is running 24/7 on Render!");
+  res.send("🍃 どうぶつの森林 Bot is running 24/7 on Render!");
 });
 
 app.listen(PORT, () => {

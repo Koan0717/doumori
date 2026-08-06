@@ -1,14 +1,14 @@
 import { EmbedBuilder } from "discord.js";
 
 /**
- * どうぶつの森風のベースEmbedを作成
+ * どうぶつの森林風のベースEmbedを作成
  */
 export function createBaseEmbed(title, description, color = "#2ECC71") {
   return new EmbedBuilder()
     .setTitle(title)
     .setDescription(description)
     .setColor(color)
-    .setFooter({ text: "🍃 あつまれ どうぶつの森 Bot", iconURL: "https://i.imgur.com/8Q9Z8qE.png" })
+    .setFooter({ text: "🍃 どうぶつの森林 Bot", iconURL: "https://i.imgur.com/8Q9Z8qE.png" })
     .setTimestamp();
 }
 

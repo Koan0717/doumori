@@ -6,21 +6,21 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("exchange")
-    .setDescription("manybotの通貨と図鑑チケットを交換・相互両替します🔀")
+    .setDescription("通貨と図鑑チケットを交換・相互両替します🔀")
     .addStringOption((option) =>
       option
         .setName("action")
         .setDescription("両替の方向を選択してください")
         .setRequired(true)
         .addChoices(
-          { name: "🪙 manybotコイン ➔ 🎫 図鑑チケット (500コインで1枚)", value: "to_ticket" },
-          { name: "🎫 図鑑チケット ➔ 🪙 manybotコイン (1枚で500コイン)", value: "to_coin" }
+          { name: "🪙 通貨 ➔ 🎫 図鑑チケット (500通貨で1枚)", value: "to_ticket" },
+          { name: "🎫 図鑑チケット ➔ 🪙 通貨 (1枚で500通貨)", value: "to_coin" }
         )
     )
     .addIntegerOption((option) =>
       option
         .setName("amount")
-        .setDescription("両替する数量（チケット枚数、またはコイン数に応じた数量）")
+        .setDescription("両替する数量（チケット枚数、または通貨数に応じた数量）")
         .setRequired(false)
         .setMinValue(1)
     ),
@@ -40,32 +40,32 @@ export const command = {
     const userData = await getUser(guildId, userId);
 
     if (action === "to_ticket") {
-      // 必要なmanybotコイン
+      // 必要な通貨
       const requiredCoins = amount * rate;
       if (manybotBalance < requiredCoins) {
         const errorEmbed = createBaseEmbed(
-          "⚠️ コイン不足",
-          `チケット **${amount}** 枚と交換するには **${requiredCoins}** コインが必要です。\n（現在の所持コイン: **${manybotBalance}** コイン）`,
+          "⚠️ 通貨不足",
+          `チケット **${amount}** 枚と交換するには **${requiredCoins}** 通貨が必要です。\n（現在の所持通貨: **${manybotBalance}** 通貨）`,
           "#E74C3C"
         );
         await interaction.followUp({ embeds: [errorEmbed] });
         return;
       }
 
-      // manybotコイン減額 ＆ チケット増額
+      // 通貨減額 ＆ チケット増額
       await addManybotBalance(guildId, userId, -requiredCoins);
       const newTickets = await addTickets(guildId, userId, amount);
       const newBalance = await getManybotBalance(guildId, userId);
 
       const embed = createBaseEmbed(
         "🔀 通貨両替完了！",
-        `**${requiredCoins}** manybotコイン を消費して、**図鑑チケット ×${amount}** を入手しました！`,
+        `**${requiredCoins}** 通貨 を消費して、**図鑑チケット ×${amount}** を入手しました！`,
         "#F1C40F"
       );
 
       embed.addFields(
         { name: "🎫 所持チケット", value: `**${newTickets}** 枚`, inline: true },
-        { name: "🪙 manybot残高", value: `**${newBalance}** コイン`, inline: true }
+        { name: "🪙 通貨残高", value: `**${newBalance}** 通貨`, inline: true }
       );
 
       await interaction.followUp({ embeds: [embed] });
@@ -82,7 +82,7 @@ export const command = {
 
       const gainedCoins = amount * rate;
 
-      // チケット減額 ＆ manybotコイン増額
+      // チケット減額 ＆ 通貨増額
       await addTickets(guildId, userId, -amount);
       await addManybotBalance(guildId, userId, gainedCoins);
 
@@ -91,13 +91,13 @@ export const command = {
 
       const embed = createBaseEmbed(
         "🔀 通貨両替完了！",
-        `**図鑑チケット ×${amount}** を消費して、**${gainedCoins}** manybotコイン を獲得しました！`,
+        `**図鑑チケット ×${amount}** を消費して、**${gainedCoins}** 通貨 を獲得しました！`,
         "#F1C40F"
       );
 
       embed.addFields(
         { name: "🎫 所持チケット", value: `**${newTickets}** 枚`, inline: true },
-        { name: "🪙 manybot残高", value: `**${newBalance}** コイン`, inline: true }
+        { name: "🪙 通貨残高", value: `**${newBalance}** 通貨`, inline: true }
       );
 
       await interaction.followUp({ embeds: [embed] });

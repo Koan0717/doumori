@@ -64,7 +64,7 @@ export const command = {
       });
 
       embed.setFooter({
-        text: `ページ ${page + 1} / ${totalPages} | 🍃 あつまれ どうぶつの森 Bot`,
+        text: `ページ ${page + 1} / ${totalPages} | 🍃 どうぶつの森林 Bot`,
       });
 
       return embed;

@@ -44,7 +44,7 @@ export const command = {
 
     const embed = createBaseEmbed(
       `📊 住民プロフィール - ${targetUser.displayName}`,
-      `あつまれ どうぶつの森 Bot の冒険者データです。`,
+      `どうぶつの森林 Bot の冒険者データです。`,
       "#2ECC71"
     );
 
@@ -52,7 +52,7 @@ export const command = {
 
     embed.addFields(
       { name: "🎫 所持チケット", value: `**${userData.tickets}** 枚`, inline: true },
-      { name: "🪙 manybot残高", value: `**${manybotBalance}** コイン`, inline: true },
+      { name: "🪙 通貨残高", value: `**${manybotBalance}** 通貨`, inline: true },
       { name: "⏱️ 通算浮上時間", value: `**${totalHours}** 時間`, inline: true },
       { name: "🎒 所持道具", value: `・つりざお: **${rodCount}** 本\n・虫取り網: **${netCount}** 本`, inline: false },
       { name: "🐟 魚図鑑達成率", value: fishProgress, inline: false },
