@@ -111,14 +111,14 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
   }
-  // B. パネルボタンクリックの実行
+  // B. パネルボタンクリックの実行 (ephemeral: true で自分だけに表示)
   else if (interaction.isButton() && interaction.customId.startsWith("btn_")) {
     const targetCmd = buttonCommandMap[interaction.customId];
     if (!targetCmd) return;
 
     try {
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: false }).catch(() => {});
+        await interaction.deferReply({ ephemeral: true }).catch(() => {});
       }
       await targetCmd.execute(interaction);
     } catch (error) {

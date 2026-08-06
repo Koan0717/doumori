@@ -11,7 +11,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply().catch(() => {});
+      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

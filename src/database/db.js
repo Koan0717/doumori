@@ -17,7 +17,6 @@ if (!doumoriDbUrl) {
 
 const getSslOption = (url) => {
   if (!url) return false;
-  // SupabaseやクラウドPostgreSQLの場合はSSL有効化
   if (url.includes("supabase") || url.includes("postgres.database.azure.com") || url.includes("render.com") || url.includes("neon.tech")) {
     return { rejectUnauthorized: false };
   }
@@ -96,19 +95,47 @@ export async function initDatabase() {
     if (client) client.release();
   }
 
-  // Manybot DB側にも users テーブルの確保 (フォールバック時含む)
+  // Manybot DB側にも users テーブルの全カラム確保
   let mbClient;
   try {
     mbClient = await manybotPool.connect();
+
+    // テーブル作成
     await mbClient.query(`
       CREATE TABLE IF NOT EXISTS users (
         guild_id BIGINT,
         user_id BIGINT,
         balance INTEGER DEFAULT 0,
+        last_daily TIMESTAMP,
+        chinchiro_count INTEGER DEFAULT 0,
+        chinchiro_last_date TEXT,
+        chinchiro_daily_bet INTEGER DEFAULT 0,
+        tc_xp INTEGER DEFAULT 0,
+        tc_level INTEGER DEFAULT 1,
+        vc_xp INTEGER DEFAULT 0,
+        vc_level INTEGER DEFAULT 1,
         PRIMARY KEY (guild_id, user_id)
       );
     `);
-    console.log("✅ manybot データベース接続・確認が完了しました。");
+
+    // manybotが必要とする欠落カラムの安全補強 (ALTER TABLE)
+    const columnsToEnsure = [
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS balance INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily TIMESTAMP",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS chinchiro_count INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS chinchiro_last_date TEXT",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS chinchiro_daily_bet INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS tc_xp INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS tc_level INTEGER DEFAULT 1",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS vc_xp INTEGER DEFAULT 0",
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS vc_level INTEGER DEFAULT 1",
+    ];
+
+    for (const colQuery of columnsToEnsure) {
+      await mbClient.query(colQuery).catch((err) => console.warn(`Migration warning: ${err.message}`));
+    }
+
+    console.log("✅ manybot データベース（usersテーブル・全カラム）の確認・補強が完了しました。");
   } catch (err) {
     console.error("❌ manybot DB初期化確認エラー:", err);
   } finally {
