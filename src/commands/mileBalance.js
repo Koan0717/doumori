@@ -20,7 +20,10 @@ export const command = {
 
     const guildId = interaction.guild.id;
     const targetUser = (interaction.options && interaction.options.getUser("user")) || interaction.user;
-    const cardData = await getResidentCardData(guildId, targetUser.id);
+    const member = interaction.guild
+      ? await interaction.guild.members.fetch(targetUser.id).catch(() => null)
+      : null;
+    const cardData = await getResidentCardData(guildId, targetUser.id, member);
 
     const embed = buildResidentCardEmbed(cardData, targetUser);
 

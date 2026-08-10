@@ -1,12 +1,12 @@
 import { SlashCommandBuilder } from "discord.js";
-import { CONFIG } from "../config.js";
+import { CONFIG, resolveRankFromMember } from "../config.js";
 import { getUserMiles } from "../database/db.js";
 import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
     .setName("マイル")
-    .setDescription("現在の所持マイルポイントとランク昇格状況を確認します🌟"),
+    .setDescription("現在の所持マイルポイントと階級昇格状況を確認します🌟"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
@@ -17,18 +17,18 @@ export const command = {
     const userId = interaction.user.id;
 
     const userMiles = await getUserMiles(guildId, userId);
-    const currentRank = CONFIG.RANKS.find((r) => r.level === userMiles.rank_level) || CONFIG.RANKS[0];
-    const nextRank = CONFIG.RANKS.find((r) => r.level === userMiles.rank_level + 1);
+    const currentRank = resolveRankFromMember(interaction.member, userMiles.rank_level);
+    const nextRank = CONFIG.RANKS.find((r) => r.level === currentRank.level + 1);
 
     const embed = createBaseEmbed(
-      "🌟 マイルポイント & ランクステータス",
+      "🌟 マイルポイント & 階級ステータス",
       `ステップアップサーバーの現在の実績データです。`,
       currentRank.color
     );
 
     embed.addFields(
-      { name: "🏷️ 現在のランク", value: `**${currentRank.name}**`, inline: true },
-      { name: "🌟 所持マイルポイント", value: `**${userMiles.miles}** マイル`, inline: true }
+      { name: "🏷️ 現在の階級", value: `**${currentRank.name}**`, inline: true },
+      { name: "🌟 所持マイルポイント", value: `**${userMiles.miles.toLocaleString()}** pt`, inline: true }
     );
 
     if (nextRank) {

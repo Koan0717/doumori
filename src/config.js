@@ -44,11 +44,10 @@ export const CONFIG = {
 
   // 🌟 ステップアップ階級設定 (レベル, 階級名, 必要マイル, カラー)
   RANKS: [
-    { level: 1, name: "🌱 新規住民", requiredMiles: 0, color: "#A8E6CF" },
-    { level: 2, name: "🥉 見習い住民", requiredMiles: 300, color: "#CD7F32" },
-    { level: 3, name: "🥈 一人前住民", requiredMiles: 800, color: "#C0C0C0" },
-    { level: 4, name: "🥇 ベテラン住民", requiredMiles: 1500, color: "#FFD700" },
-    { level: 5, name: "👑 名誉マスター住民", requiredMiles: 3000, color: "#9B59B6" },
+    { level: 1, name: "🌱 新規住人", requiredMiles: 0, color: "#A8E6CF" },
+    { level: 2, name: "🏠 住人", requiredMiles: 300, color: "#3498DB" },
+    { level: 3, name: "☕ 常連住人", requiredMiles: 800, color: "#E67E22" },
+    { level: 4, name: "🌟 人気住人", requiredMiles: 1500, color: "#FFD700" },
   ],
 
   // DIY作業台 (イベント開催) の報酬マイル & クールダウン (7日間)
@@ -77,10 +76,54 @@ export const CONFIG = {
       { desc: "図鑑でまだ持っていない生き物を新しく1匹捕まえる", miles: 120 },
       { desc: "イベントまたはDIY作業台に参加・告知する", miles: 100 },
     ],
-    5: [
-      { desc: "サーバー内で他の住民の質問に答えたり交流を促進する", miles: 150 },
-      { desc: "SUPER_RARE以上の生き物を捕獲するか図鑑完成率を伸ばす", miles: 200 },
-      { desc: "通算4時間以上VCで浮上する", miles: 150 },
-    ],
   },
 };
+
+/**
+ * メンバーのロール一覧から「新規住人 / 住人 / 常連住人 / 人気住人」を検出して階級情報を解決
+ */
+export function resolveRankFromMember(member, defaultRankLevel = 1) {
+  if (member && member.roles && member.roles.cache) {
+    const roleNames = member.roles.cache.map((r) => r.name);
+
+    // 1. 人気住人ロール判定 (Level 4)
+    const popularRole = roleNames.find((name) => name.includes("人気住人") || name.includes("人気住民"));
+    if (popularRole) {
+      return { level: 4, name: "🌟 人気住人", roleName: popularRole, color: "#FFD700" };
+    }
+
+    // 2. 常連住人ロール判定 (Level 3)
+    const regularRole = roleNames.find((name) => name.includes("常連住人") || name.includes("常連住民"));
+    if (regularRole) {
+      return { level: 3, name: "☕ 常連住人", roleName: regularRole, color: "#E67E22" };
+    }
+
+    // 3. 住人ロール判定 (Level 2: 「新規」「常連」「人気」を含まない単体の住人/住人ロール)
+    const citizenRole = roleNames.find(
+      (name) =>
+        (name.includes("住人") || name.includes("住民")) &&
+        !name.includes("新規") &&
+        !name.includes("常連") &&
+        !name.includes("人気")
+    );
+    if (citizenRole) {
+      return { level: 2, name: "🏠 住人", roleName: citizenRole, color: "#3498DB" };
+    }
+
+    // 4. 新規住人ロール判定 (Level 1)
+    const rookieRole = roleNames.find((name) => name.includes("新規住人") || name.includes("新規住民"));
+    if (rookieRole) {
+      return { level: 1, name: "🌱 新規住人", roleName: rookieRole, color: "#A8E6CF" };
+    }
+  }
+
+  // ロールで判定できない場合は defaultRankLevel に応じた階級を返す
+  const rankConfig =
+    CONFIG.RANKS.find((r) => r.level === defaultRankLevel) || CONFIG.RANKS[0];
+  return {
+    level: rankConfig.level,
+    name: rankConfig.name,
+    roleName: rankConfig.name,
+    color: rankConfig.color,
+  };
+}

@@ -110,14 +110,18 @@ export const command = {
 
       await i.deferUpdate();
 
-      const result = await approveMissionReport(guildId, userId, mission.date_key, i.user.id, count);
+      const reportMember = interaction.guild
+        ? await interaction.guild.members.fetch(userId).catch(() => interaction.member)
+        : interaction.member;
+
+      const result = await approveMissionReport(guildId, userId, mission.date_key, i.user.id, count, reportMember);
       if (!result) {
         await i.followUp({ content: "すでに承認済みです。", ephemeral: true });
         return;
       }
 
-      // 最新の住民カード情報を取得
-      const cardData = await getResidentCardData(guildId, userId);
+      // 最新の住民カード情報を取得 (ロール反映)
+      const cardData = await getResidentCardData(guildId, userId, reportMember);
       const cardEmbed = buildResidentCardEmbed(cardData, interaction.user);
 
       const approvedEmbed = createBaseEmbed(

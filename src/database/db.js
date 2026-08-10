@@ -1,6 +1,6 @@
 import pg from "pg";
 import dotenv from "dotenv";
-import { CONFIG } from "../config.js";
+import { CONFIG, resolveRankFromMember } from "../config.js";
 
 dotenv.config();
 
@@ -331,23 +331,23 @@ export async function submitMissionReport(guildId, userId, dateKey, proofUrl) {
 }
 
 /**
- * 住民カード用データの総合取得
+ * 住民カード用データの総合取得（ロール情報を優先反映）
  */
-export async function getResidentCardData(guildId, userId) {
+export async function getResidentCardData(guildId, userId, member = null) {
   const milesData = await getUserMiles(guildId, userId);
   const doumoriUser = await getUser(guildId, userId);
   const bells = await getManybotBalance(guildId, userId);
 
-  const rankConfig =
-    CONFIG.RANKS.find((r) => r.level === milesData.rank_level) || CONFIG.RANKS[0];
+  const rankInfo = resolveRankFromMember(member, milesData.rank_level);
 
   return {
     guildId,
     userId,
     miles: milesData.miles || 0,
-    rankLevel: milesData.rank_level || 1,
-    rankName: rankConfig.name,
-    rankColor: rankConfig.color,
+    rankLevel: rankInfo.level,
+    rankName: rankInfo.name,
+    rankRoleName: rankInfo.roleName,
+    rankColor: rankInfo.color,
     missionCount: milesData.mission_count || 0,
     totalMissionCount: milesData.total_mission_count || 0,
     tickets: doumoriUser.tickets || 0,
@@ -358,7 +358,7 @@ export async function getResidentCardData(guildId, userId) {
 /**
  * デイリーミッションの承認 ＆ マイル付与 ＆ 住民カードカウント自動更新 ＆ 履歴保存
  */
-export async function approveMissionReport(guildId, userId, dateKey, staffId = null, countMultiplier = 1) {
+export async function approveMissionReport(guildId, userId, dateKey, staffId = null, countMultiplier = 1, member = null) {
   const res = await doumoriPool.query(
     "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
     [guildId, userId, dateKey]
@@ -400,17 +400,16 @@ export async function approveMissionReport(guildId, userId, dateKey, staffId = n
     [guildId, userId, staffId, mission.mission_desc, totalRewardMiles, count]
   ).catch((err) => console.error("❌ Mission log save error:", err));
 
-  const rankConfig =
-    CONFIG.RANKS.find((r) => r.level === updatedMiles.rank_level) || CONFIG.RANKS[0];
+  const rankInfo = resolveRankFromMember(member, updatedMiles.rank_level);
 
   return {
     missionDesc: mission.mission_desc,
     countMultiplier: count,
     rewardMiles: totalRewardMiles,
     newMiles: updatedMiles.miles,
-    rankLevel: updatedMiles.rank_level,
-    rankName: rankConfig.name,
-    rankColor: rankConfig.color,
+    rankLevel: rankInfo.level,
+    rankName: rankInfo.name,
+    rankColor: rankInfo.color,
     missionCount: updatedMiles.mission_count,
     totalMissionCount: updatedMiles.total_mission_count,
   };

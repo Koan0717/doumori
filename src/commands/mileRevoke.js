@@ -49,7 +49,10 @@ export const command = {
     const reason = interaction.options.getString("reason") || "管理者による手動没収・調整";
 
     const result = await adminRemoveMiles(guildId, targetUser.id, amount, interaction.user.id, reason);
-    const cardData = await getResidentCardData(guildId, targetUser.id);
+    const member = interaction.guild
+      ? await interaction.guild.members.fetch(targetUser.id).catch(() => null)
+      : null;
+    const cardData = await getResidentCardData(guildId, targetUser.id, member);
     const cardEmbed = buildResidentCardEmbed(cardData, targetUser);
 
     const embed = createBaseEmbed(
