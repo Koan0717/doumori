@@ -16,6 +16,10 @@ import { command as missionCmd } from "../commands/mission.js";
 import { command as missionReportCmd } from "../commands/missionReport.js";
 import { command as diyCmd } from "../commands/diy.js";
 import { command as rankupCmd } from "../commands/rankup.js";
+import { command as cardCmd } from "../commands/card.js";
+import { command as mileGrantCmd } from "../commands/mileGrant.js";
+import { command as mileRevokeCmd } from "../commands/mileRevoke.js";
+import { command as mileBalanceCmd } from "../commands/mileBalance.js";
 
 dotenv.config();
 
@@ -36,6 +40,10 @@ const commands = [
   missionReportCmd.data.toJSON(),
   diyCmd.data.toJSON(),
   rankupCmd.data.toJSON(),
+  cardCmd.data.toJSON(),
+  mileGrantCmd.data.toJSON(),
+  mileRevokeCmd.data.toJSON(),
+  mileBalanceCmd.data.toJSON(),
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;

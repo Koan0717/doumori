@@ -96,10 +96,16 @@ export async function initDatabase() {
         user_id BIGINT,
         miles INTEGER DEFAULT 0,
         rank_level INTEGER DEFAULT 1,
+        mission_count INTEGER DEFAULT 0,
+        total_mission_count INTEGER DEFAULT 0,
         last_diy_at TIMESTAMP,
         PRIMARY KEY (guild_id, user_id)
       );
     `);
+
+    // 既存テーブルへのカラム追加（安全なマイグレーション）
+    await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS mission_count INTEGER DEFAULT 0").catch(() => {});
+    await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS total_mission_count INTEGER DEFAULT 0").catch(() => {});
 
     // 5. デイリーミッションテーブル
     await client.query(`
@@ -115,7 +121,35 @@ export async function initDatabase() {
       );
     `);
 
-    console.log("✅ doumori データベーススキーマ（マイル＆ミッション含む）の初期化が完了しました。");
+    // 6. ミッション承認・処理履歴ログテーブル
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_mission_logs (
+        id SERIAL PRIMARY KEY,
+        guild_id BIGINT,
+        user_id BIGINT,
+        staff_id BIGINT,
+        mission_desc TEXT,
+        reward_miles INTEGER DEFAULT 100,
+        mission_count INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 7. マイル手動付与・没収ログテーブル (管理者用)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_mile_logs (
+        id SERIAL PRIMARY KEY,
+        guild_id BIGINT,
+        user_id BIGINT,
+        admin_id BIGINT,
+        amount INTEGER,
+        action TEXT,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("✅ doumori データベーススキーマ（マイル・ミッション・履歴ログ含む）の初期化が完了しました。");
   } catch (error) {
     console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
@@ -297,9 +331,34 @@ export async function submitMissionReport(guildId, userId, dateKey, proofUrl) {
 }
 
 /**
- * デイリーミッションの承認 ＆ マイル付与
+ * 住民カード用データの総合取得
  */
-export async function approveMissionReport(guildId, userId, dateKey) {
+export async function getResidentCardData(guildId, userId) {
+  const milesData = await getUserMiles(guildId, userId);
+  const doumoriUser = await getUser(guildId, userId);
+  const bells = await getManybotBalance(guildId, userId);
+
+  const rankConfig =
+    CONFIG.RANKS.find((r) => r.level === milesData.rank_level) || CONFIG.RANKS[0];
+
+  return {
+    guildId,
+    userId,
+    miles: milesData.miles || 0,
+    rankLevel: milesData.rank_level || 1,
+    rankName: rankConfig.name,
+    rankColor: rankConfig.color,
+    missionCount: milesData.mission_count || 0,
+    totalMissionCount: milesData.total_mission_count || 0,
+    tickets: doumoriUser.tickets || 0,
+    bells: bells || 0,
+  };
+}
+
+/**
+ * デイリーミッションの承認 ＆ マイル付与 ＆ 住民カードカウント自動更新 ＆ 履歴保存
+ */
+export async function approveMissionReport(guildId, userId, dateKey, staffId = null, countMultiplier = 1) {
   const res = await doumoriPool.query(
     "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
     [guildId, userId, dateKey]
@@ -310,6 +369,8 @@ export async function approveMissionReport(guildId, userId, dateKey) {
   }
 
   const mission = res.rows[0];
+  const count = Math.max(1, parseInt(countMultiplier, 10) || 1);
+  const totalRewardMiles = (mission.reward_miles || 30) * count;
 
   // ステータスを達成済みに更新
   await doumoriPool.query(
@@ -317,10 +378,104 @@ export async function approveMissionReport(guildId, userId, dateKey) {
     [guildId, userId, dateKey]
   );
 
-  // 報酬マイルを加算
-  const newMiles = await addMiles(guildId, userId, mission.reward_miles);
+  // マイル加算 ＆ 階級ミッション回数 ＆ 累計ミッション回数の加算
+  const updateRes = await doumoriPool.query(
+    `INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level, mission_count, total_mission_count)
+     VALUES ($1, $2, $3, 1, $4, $4)
+     ON CONFLICT (guild_id, user_id)
+     DO UPDATE SET
+       miles = doumori_miles.miles + $3,
+       mission_count = COALESCE(doumori_miles.mission_count, 0) + $4,
+       total_mission_count = COALESCE(doumori_miles.total_mission_count, 0) + $4
+     RETURNING miles, rank_level, mission_count, total_mission_count`,
+    [guildId, userId, totalRewardMiles, count]
+  );
 
-  return { rewardMiles: mission.reward_miles, newMiles };
+  const updatedMiles = updateRes.rows[0];
+
+  // 処理履歴（ログ）をDBに保存
+  await doumoriPool.query(
+    `INSERT INTO doumori_mission_logs (guild_id, user_id, staff_id, mission_desc, reward_miles, mission_count)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [guildId, userId, staffId, mission.mission_desc, totalRewardMiles, count]
+  ).catch((err) => console.error("❌ Mission log save error:", err));
+
+  const rankConfig =
+    CONFIG.RANKS.find((r) => r.level === updatedMiles.rank_level) || CONFIG.RANKS[0];
+
+  return {
+    missionDesc: mission.mission_desc,
+    countMultiplier: count,
+    rewardMiles: totalRewardMiles,
+    newMiles: updatedMiles.miles,
+    rankLevel: updatedMiles.rank_level,
+    rankName: rankConfig.name,
+    rankColor: rankConfig.color,
+    missionCount: updatedMiles.mission_count,
+    totalMissionCount: updatedMiles.total_mission_count,
+  };
+}
+
+/**
+ * 管理者によるマイル付与
+ */
+export async function adminAddMiles(guildId, userId, amount, adminId, reason = "") {
+  const newMiles = await addMiles(guildId, userId, amount);
+  await doumoriPool.query(
+    `INSERT INTO doumori_mile_logs (guild_id, user_id, admin_id, amount, action, reason)
+     VALUES ($1, $2, $3, $4, 'grant', $5)`,
+    [guildId, userId, adminId, amount, reason]
+  ).catch((err) => console.error("❌ Mile grant log error:", err));
+  return newMiles;
+}
+
+/**
+ * 管理者によるマイル没収
+ */
+export async function adminRemoveMiles(guildId, userId, amount, adminId, reason = "") {
+  const currentData = await getUserMiles(guildId, userId);
+  const actualDeduct = Math.min(currentData.miles, amount);
+  const newMiles = await addMiles(guildId, userId, -actualDeduct);
+
+  await doumoriPool.query(
+    `INSERT INTO doumori_mile_logs (guild_id, user_id, admin_id, amount, action, reason)
+     VALUES ($1, $2, $3, $4, 'revoke', $5)`,
+    [guildId, userId, adminId, actualDeduct, reason]
+  ).catch((err) => console.error("❌ Mile revoke log error:", err));
+
+  return { newMiles, deducted: actualDeduct };
+}
+
+/**
+ * マイルを消費してチケットを購入
+ */
+export async function buyTicketsWithMiles(guildId, userId, ticketCount = 1) {
+  const rate = CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100;
+  const count = Math.max(1, parseInt(ticketCount, 10) || 1);
+  const requiredMiles = count * rate;
+
+  const currentMilesData = await getUserMiles(guildId, userId);
+  if (currentMilesData.miles < requiredMiles) {
+    return {
+      success: false,
+      reason: "NOT_ENOUGH_MILES",
+      needed: requiredMiles,
+      current: currentMilesData.miles,
+    };
+  }
+
+  // マイルを消費
+  const newMiles = await addMiles(guildId, userId, -requiredMiles);
+  // チケットを付与
+  const newTickets = await addTickets(guildId, userId, count);
+
+  return {
+    success: true,
+    spentMiles: requiredMiles,
+    ticketCount: count,
+    newMiles,
+    newTickets,
+  };
 }
 
 /**

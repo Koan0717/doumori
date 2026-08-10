@@ -7,8 +7,12 @@ export const CONFIG = {
 
   // exchange (通貨交換) のデフォルトレート
   EXCHANGE_RATES: {
-    MANYBOT_PER_TICKET: 500, // 500通貨 = チケット1枚
+    MANYBOT_PER_TICKET: 500, // 500ベル = チケット1枚 (旧仕様互換)
+    MILES_PER_TICKET: 100,   // 100マイル = チケット1枚 (マイル購入)
   },
+
+  // 通貨名
+  CURRENCY_NAME: "ベル",
 
   // 道具購入価格 (チケット数)
   ITEM_PRICES: {
@@ -28,7 +32,7 @@ export const CONFIG = {
     },
   },
 
-  // 売却額ベース (レア度別 通貨換算)
+  // 売却額ベース (レア度別 ベル換算)
   SELL_PRICES: {
     COMMON: 100,
     UNCOMMON: 300,
@@ -38,13 +42,13 @@ export const CONFIG = {
     SHINY_MULTIPLIER: 5,
   },
 
-  // 🌟 ステップアップランク設定 (レベル, ロール名, 必要マイル, カラー)
+  // 🌟 ステップアップ階級設定 (レベル, 階級名, 必要マイル, カラー)
   RANKS: [
-    { level: 1, name: "🌱 ランク1 (ビギナー)", requiredMiles: 0, color: "#A8E6CF" },
-    { level: 2, name: "🥉 ランク2 (ブロンズ)", requiredMiles: 100, color: "#CD7F32" },
-    { level: 3, name: "🥈 ランク3 (シルバー)", requiredMiles: 300, color: "#C0C0C0" },
-    { level: 4, name: "🥇 ランク4 (ゴールド)", requiredMiles: 600, color: "#FFD700" },
-    { level: 5, name: "👑 ランク5 (マスター)", requiredMiles: 1200, color: "#9B59B6" },
+    { level: 1, name: "🌱 新規住民", requiredMiles: 0, color: "#A8E6CF" },
+    { level: 2, name: "🥉 見習い住民", requiredMiles: 300, color: "#CD7F32" },
+    { level: 3, name: "🥈 一人前住民", requiredMiles: 800, color: "#C0C0C0" },
+    { level: 4, name: "🥇 ベテラン住民", requiredMiles: 1500, color: "#FFD700" },
+    { level: 5, name: "👑 名誉マスター住民", requiredMiles: 3000, color: "#9B59B6" },
   ],
 
   // DIY作業台 (イベント開催) の報酬マイル & クールダウン (7日間)

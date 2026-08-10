@@ -29,27 +29,28 @@ export const command = {
         name: "🎣 🦋 採集＆ショップ",
         value: "・**【魚を釣る】**: つりざおを消費して釣る\n" +
                "・**【虫を捕まえる】**: 虫取り網を消費して捕まえる\n" +
-               "・**【タヌキショップ】**: チケットで道具を交換",
+               "・**【タヌキショップ】**: マイルでチケット購入＆道具交換",
         inline: false,
       },
       {
-        name: "🌟 📅 🛠️ ⬆️ マイル＆ステップアップランク",
-        value: "・**【マイル確認】**: 現在のマイルとランク状態を確認\n" +
-               "・**【ミッション】**: 今日のランク別デイリーミッションを確認\n" +
+        name: "🌟 📅 🛠️ ⬆️ マイル＆階級ステップアップ",
+        value: "・**【マイル確認】**: 現在のマイルと階級状態を確認\n" +
+               "・**【ミッション】**: 今日の階級別デイリーミッションを確認\n" +
                "・**【DIY作業台】**: 週1回のイベント開催告知でマイル獲得\n" +
-               "・**【ランクアップ】**: マイルを消費して次のランクに昇格！",
+               "・**【階級アップ】**: マイルを消費して次の階級に昇格！",
         inline: false,
       },
       {
         name: "📖 🔀 💰 図鑑・両替・売却",
         value: "・**【魚図鑑】/【虫図鑑】**: 各図鑑と完成率を確認\n" +
-               "・**【両替】**: 所持通貨 ⇄ 図鑑チケット の相互両替\n" +
-               "・**【ダブり売却】**: 重複した生き物をまとめて換金",
+               "・**【両替】**: マイル/ベル ⇄ 図鑑チケット の相互両替\n" +
+               "・**【ダブり売却】**: 重複した生き物をまとめてベルに換金",
         inline: false,
       },
       {
-        name: "📊 🏆 ❓ プロフィール・ランキング・ヘルプ",
-        value: "・**【プロフィール】**: 自分の持ち物や完成率を確認\n" +
+        name: "🃏 📊 🏆 ❓ 住民カード・プロフ・ランキング・ヘルプ",
+        value: "・**【住民カード】**: 階級・ミッション達成回数・ポイント証を表示\n" +
+               "・**【プロフィール】**: 自分の持ち物や図鑑完成率を確認\n" +
                "・**【ランキング】**: サーバー内完成率 Top 10\n" +
                "・**【ヘルプ】**: 遊び方ガイドパネルを表示",
         inline: false,
@@ -68,19 +69,20 @@ export const command = {
       new ButtonBuilder().setCustomId("btn_miles").setLabel("🌟 マイル確認").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_mission").setLabel("📅 ミッション").setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId("btn_diy").setLabel("🛠️ DIY作業台").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("btn_rankup").setLabel("⬆️ ランクアップ").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("btn_rankup").setLabel("⬆️ 階級アップ").setStyle(ButtonStyle.Danger)
     );
 
     // 行3: 図鑑・両替・売却
     const row3 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_fishbook").setLabel("📖 魚図鑑").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_bugbook").setLabel("📖 虫図鑑").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("btn_exchange").setLabel("🔀 通貨両替").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("btn_sell").setLabel("💰 ダブり売却").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("btn_exchange").setLabel("🔀 両替").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("btn_sell").setLabel("💰 ダブり売却 (ベル)").setStyle(ButtonStyle.Danger)
     );
 
-    // 行4: プロフィール・ランキング・ヘルプ
+    // 行4: 住民カード・プロフィール・ランキング・ヘルプ
     const row4 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("btn_card").setLabel("🃏 住民カード").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_profile").setLabel("📊 プロフィール").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_leaderboard").setLabel("🏆 ランキング").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_help").setLabel("❓ ヘルプ").setStyle(ButtonStyle.Secondary)

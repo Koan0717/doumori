@@ -11,18 +11,28 @@ import {
   getOrCreateDailyMission,
   submitMissionReport,
   approveMissionReport,
+  getResidentCardData,
 } from "../database/db.js";
+import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
   data: new SlashCommandBuilder()
     .setName("ミッション報告")
-    .setDescription("本日のデイリーミッション達成のスクリーンショットを添えて報告します📸")
+    .setDescription("ミッション達成のスクリーンショットを添えて報告します📸")
     .addAttachmentOption((option) =>
       option
         .setName("screenshot")
         .setDescription("ミッション達成のスクリーンショット画像")
         .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("count")
+        .setDescription("ミッション達成回数 (省略時は1回)")
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(10)
     ),
 
   async execute(interaction) {
@@ -33,6 +43,7 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
     const attachment = interaction.options.getAttachment("screenshot");
+    const count = interaction.options.getInteger("count") || 1;
 
     // 画像形式チェック
     if (!attachment || !attachment.contentType || !attachment.contentType.startsWith("image/")) {
@@ -57,19 +68,24 @@ export const command = {
     // 報告を記録
     await submitMissionReport(guildId, userId, mission.date_key, attachment.url);
 
+    const totalExpectedMiles = (mission.reward_miles || 30) * count;
+
     const embed = createBaseEmbed(
       "📸 デイリーミッション達成報告",
-      `**報告者**: ${interaction.user.mention}\n**ミッション**: ${mission.mission_desc}\n**報酬マイル**: **+${mission.reward_miles}** マイル`,
+      `**報告者**: ${interaction.user.toString()}\n` +
+      `**ミッション内容**: ${mission.mission_desc}\n` +
+      `**達成回数**: **${count}** 回\n` +
+      `**付与予定ポイント**: **+${totalExpectedMiles}** pt`,
       "#3498DB"
     );
 
     embed.setImage(attachment.url);
-    embed.setFooter({ text: `提出日: ${mission.date_key} | 運営の承認をお待ちください` });
+    embed.setFooter({ text: `提出日: ${mission.date_key} | 運営スタッフの承認をお待ちください` });
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`approve_${userId}_${mission.date_key}`)
-        .setLabel("✅ 承認してマイル付与")
+        .setLabel(`✅ 承認する (+${totalExpectedMiles}pt / +${count}回)`)
         .setStyle(ButtonStyle.Success)
     );
 
@@ -79,42 +95,55 @@ export const command = {
       components: [row],
     });
 
-    // 承認ボタンコレクター
+    // 承認ボタンコレクター (24時間受付)
     const collector = reportMsg.createMessageComponentCollector({
       componentType: ComponentType.Button,
-      time: 86400000, // 24時間受付
+      time: 86400000,
     });
 
     collector.on("collect", async (i) => {
-      // 管理者権限のチェック
+      // 管理者/モデレーター権限のチェック
       if (!i.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-        await i.reply({ content: "⚠️ 報告を承認する権限がありません（管理者専用）。", ephemeral: true });
+        await i.reply({ content: "⚠️ 報告を承認する権限がありません（スタッフ・管理者専用）。", ephemeral: true });
         return;
       }
 
       await i.deferUpdate();
 
-      const result = await approveMissionReport(guildId, userId, mission.date_key);
+      const result = await approveMissionReport(guildId, userId, mission.date_key, i.user.id, count);
       if (!result) {
         await i.followUp({ content: "すでに承認済みです。", ephemeral: true });
         return;
       }
 
+      // 最新の住民カード情報を取得
+      const cardData = await getResidentCardData(guildId, userId);
+      const cardEmbed = buildResidentCardEmbed(cardData, interaction.user);
+
       const approvedEmbed = createBaseEmbed(
-        "🎉 ミッション承認完了！",
-        `${interaction.user.mention} さんのミッション報告が ${i.user.mention} によって承認されました！\n\n🎁 **+${result.rewardMiles}** マイル を獲得！ (現在の所持: **${result.newMiles}** マイル)`,
+        "🎉 ミッション承認完了＆自動反映！",
+        `**承認スタッフ**: ${i.user.toString()}\n` +
+        `**対象者**: ${interaction.user.toString()}\n\n` +
+        `💰 **獲得ポイント**: **+${result.rewardMiles}** pt\n` +
+        `📈 **ミッション達成**: **+${result.countMultiplier}** 回\n` +
+        `📝 **処理履歴**: 記録完了\n` +
+        `🃏 **住民カード**: 最新情報に自動更新されました！`,
         "#2ECC71"
       );
 
       const disabledRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("approved")
-          .setLabel(`✅ 承認済み (by ${i.user.displayName})`)
+          .setLabel(`✅ 承認完了 (by ${i.user.displayName})`)
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
       );
 
-      await i.editReply({ embeds: [embed, approvedEmbed], components: [disabledRow] });
+      await i.editReply({
+        content: `✅ ${interaction.user.toString()} さんのミッション報告が承認されました！`,
+        embeds: [approvedEmbed, cardEmbed],
+        components: [disabledRow],
+      });
     });
   },
 };

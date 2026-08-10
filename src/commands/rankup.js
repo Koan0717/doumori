@@ -41,8 +41,14 @@ export const command = {
       return;
     }
 
-    // ランク昇格処理
-    await setRankLevel(guildId, userId, nextRank.level);
+    // ランク昇格処理 (現在の階級ミッション回数は新階級用にリセット)
+    await doumoriPool.query(
+      `INSERT INTO doumori_miles (guild_id, user_id, rank_level, mission_count)
+       VALUES ($1, $2, $3, 0)
+       ON CONFLICT (guild_id, user_id)
+       DO UPDATE SET rank_level = $3, mission_count = 0`,
+      [guildId, userId, nextRank.level]
+    );
 
     // サーバー内ロールの自動作成・付与
     let roleGrantedText = "";
@@ -55,25 +61,30 @@ export const command = {
         role = await guild.roles.create({
           name: nextRank.name,
           color: nextRank.color,
-          reason: `ステップアップランク昇格報酬 (${nextRank.name})`,
+          reason: `ステップアップ階級昇格報酬 (${nextRank.name})`,
           hoist: true,
         });
       }
 
       if (member && !member.roles.cache.has(role.id)) {
         await member.roles.add(role);
-        roleGrantedText = `\n🏅 限定ランク用ロール **「${nextRank.name}」** を自動付与しました！`;
+        roleGrantedText = `\n🏅 限定階級ロール **「${nextRank.name}」** を自動付与しました！`;
       }
     } catch (err) {
       console.error("❌ ランクアップロール付与エラー:", err);
     }
 
+    const { getResidentCardData } = await import("../database/db.js");
+    const { buildResidentCardEmbed } = await import("./card.js");
+    const cardData = await getResidentCardData(guildId, userId);
+    const cardEmbed = buildResidentCardEmbed(cardData, interaction.user);
+
     const successEmbed = createBaseEmbed(
-      "🎉 ランクアップ成功！",
-      `${interaction.user.mention} さんが **${nextRank.name}** に昇格しました！${roleGrantedText}`,
+      "🎉 階級アップ成功！",
+      `${interaction.user.toString()} さんが **${nextRank.name}** に昇格しました！${roleGrantedText}`,
       nextRank.color
     );
 
-    await interaction.followUp({ embeds: [successEmbed] });
+    await interaction.followUp({ embeds: [successEmbed, cardEmbed] });
   },
 };

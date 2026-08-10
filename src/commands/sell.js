@@ -8,7 +8,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("売却")
-    .setDescription("重複した生き物（2匹目以降）を売却して 通貨 に換金します💰"),
+    .setDescription("重複した生き物（2匹目以降）を売却して鯖内通貨(ベル)に換金します💰"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
@@ -38,7 +38,7 @@ export const command = {
     FISH_LIST.forEach((f) => allMap.set(f.id, f));
     BUG_LIST.forEach((b) => allMap.set(b.id, b));
 
-    let totalEarnedCoins = 0;
+    let totalEarnedBells = 0;
     let soldCount = 0;
 
     for (const row of res.rows) {
@@ -52,7 +52,7 @@ export const command = {
         : basePrice;
 
       const itemTotalPrice = pricePerUnit * excessCount;
-      totalEarnedCoins += itemTotalPrice;
+      totalEarnedBells += itemTotalPrice;
       soldCount += excessCount;
 
       // カウントを 1 に更新
@@ -62,19 +62,19 @@ export const command = {
       );
     }
 
-    // 通貨を加算
-    await addManybotBalance(guildId, userId, totalEarnedCoins);
+    // ベルを加算
+    await addManybotBalance(guildId, userId, totalEarnedBells);
     const newBalance = await getManybotBalance(guildId, userId);
 
     const embed = createBaseEmbed(
       "💰 たぬき売却処 - 売却完了！",
-      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedCoins}** 通貨 を手に入れました！`,
+      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedBells.toLocaleString()}** ベル を手に入れました！🔔`,
       "#F1C40F"
     );
 
     embed.addFields({
-      name: "🪙 通貨残高",
-      value: `**${newBalance}** 通貨`,
+      name: "🔔 鯖内通貨 (ベル残高)",
+      value: `**${newBalance.toLocaleString()}** ベル`,
       inline: false,
     });
 

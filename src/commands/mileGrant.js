@@ -1,0 +1,68 @@
+import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { adminAddMiles, getResidentCardData } from "../database/db.js";
+import { buildResidentCardEmbed } from "./card.js";
+import { createBaseEmbed } from "../utils/embedBuilder.js";
+
+export const command = {
+  data: new SlashCommandBuilder()
+    .setName("マイル付与")
+    .setDescription("【管理者専用】指定した住民にマイルポイントを手動で付与します🎁")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription("マイルを付与する対象住民")
+        .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("amount")
+        .setDescription("付与するマイルポイント数")
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("reason")
+        .setDescription("付与の理由・メモ (任意)")
+        .setRequired(false)
+    ),
+
+  async execute(interaction) {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ ephemeral: false }).catch(() => {});
+    }
+
+    // 管理者権限チェック
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator) &&
+        !interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+      await interaction.followUp({
+        content: "⚠️ このコマンドを実行する権限がありません（管理者専用）。",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const guildId = interaction.guild.id;
+    const targetUser = interaction.options.getUser("user");
+    const amount = interaction.options.getInteger("amount");
+    const reason = interaction.options.getString("reason") || "管理者による手動付与";
+
+    const newMiles = await adminAddMiles(guildId, targetUser.id, amount, interaction.user.id, reason);
+    const cardData = await getResidentCardData(guildId, targetUser.id);
+    const cardEmbed = buildResidentCardEmbed(cardData, targetUser);
+
+    const embed = createBaseEmbed(
+      "🎁 マイルポイント手動付与完了",
+      `管理者 ${interaction.user.toString()} により、${targetUser.toString()} さんへマイルポイントが付与されました！\n\n` +
+      `➕ **付与ポイント**: **+${amount.toLocaleString()}** pt\n` +
+      `🌟 **現在のマイル残高**: **${newMiles.toLocaleString()}** pt\n` +
+      `📝 **理由**: ${reason}`,
+      "#2ECC71"
+    );
+
+    await interaction.followUp({
+      embeds: [embed, cardEmbed],
+    });
+  },
+};

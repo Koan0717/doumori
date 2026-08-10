@@ -22,6 +22,10 @@ import { command as missionCmd } from "./commands/mission.js";
 import { command as missionReportCmd } from "./commands/missionReport.js";
 import { command as diyCmd } from "./commands/diy.js";
 import { command as rankupCmd } from "./commands/rankup.js";
+import { command as cardCmd } from "./commands/card.js";
+import { command as mileGrantCmd } from "./commands/mileGrant.js";
+import { command as mileRevokeCmd } from "./commands/mileRevoke.js";
+import { command as mileBalanceCmd } from "./commands/mileBalance.js";
 
 dotenv.config();
 
@@ -66,6 +70,10 @@ const commandList = [
   missionReportCmd,
   diyCmd,
   rankupCmd,
+  cardCmd,
+  mileGrantCmd,
+  mileRevokeCmd,
+  mileBalanceCmd,
 ];
 
 commandList.forEach((cmd) => {
@@ -81,6 +89,7 @@ const buttonCommandMap = {
   btn_bugbook: bugbookCmd,
   btn_exchange: exchangeCmd,
   btn_sell: sellCmd,
+  btn_card: cardCmd,
   btn_profile: profileCmd,
   btn_leaderboard: leaderboardCmd,
   btn_help: helpCmd,
