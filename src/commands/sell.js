@@ -8,7 +8,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("売却")
-    .setDescription("重複した生き物（2匹目以降）を売却して鯖内通貨(ベル)に換金します💰"),
+    .setDescription("重複した生き物（2匹目以降）を売却して鯖内通貨(ゼニー)に換金します💰"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
@@ -62,19 +62,19 @@ export const command = {
       );
     }
 
-    // ベルを加算
+    // ゼニーを加算
     await addManybotBalance(guildId, userId, totalEarnedBells);
     const newBalance = await getManybotBalance(guildId, userId);
 
     const embed = createBaseEmbed(
       "💰 たぬき売却処 - 売却完了！",
-      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedBells.toLocaleString()}** ベル を手に入れました！🔔`,
+      `重複した生き物 **合計 ${soldCount} 匹** を売却し、**${totalEarnedBells.toLocaleString()}** ゼニー を手に入れました！🪙`,
       "#F1C40F"
     );
 
     embed.addFields({
-      name: "🔔 鯖内通貨 (ベル残高)",
-      value: `**${newBalance.toLocaleString()}** ベル`,
+      name: "🪙 鯖内通貨 (ゼニー残高)",
+      value: `**${newBalance.toLocaleString()}** ゼニー`,
       inline: false,
     });
 

@@ -43,8 +43,8 @@ export const command = {
       {
         name: "📖 🔀 💰 図鑑・両替・売却",
         value: "・**【魚図鑑】/【虫図鑑】**: 各図鑑と完成率を確認\n" +
-               "・**【両替】**: マイル/ベル ⇄ 図鑑チケット の相互両替\n" +
-               "・**【ダブり売却】**: 重複した生き物をまとめてベルに換金",
+               "・**【両替】**: マイル/ゼニー ⇄ 図鑑チケット の相互両替\n" +
+               "・**【ダブり売却】**: 重複した生き物をまとめてゼニーに換金",
         inline: false,
       },
       {
@@ -77,7 +77,7 @@ export const command = {
       new ButtonBuilder().setCustomId("btn_fishbook").setLabel("📖 魚図鑑").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_bugbook").setLabel("📖 虫図鑑").setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId("btn_exchange").setLabel("🔀 両替").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("btn_sell").setLabel("💰 ダブり売却 (ベル)").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("btn_sell").setLabel("💰 ダブり売却 (ゼニー)").setStyle(ButtonStyle.Danger)
     );
 
     // 行4: 住民カード・プロフィール・ランキング・ヘルプ

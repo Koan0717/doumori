@@ -13,7 +13,7 @@ import { createBaseEmbed } from "../utils/embedBuilder.js";
 export const command = {
   data: new SlashCommandBuilder()
     .setName("両替")
-    .setDescription("マイルやベルを使って図鑑チケットと交換・両替します🔀")
+    .setDescription("マイルやゼニーを使って図鑑チケットと交換・両替します🔀")
     .addStringOption((option) =>
       option
         .setName("action")
@@ -21,14 +21,14 @@ export const command = {
         .setRequired(false)
         .addChoices(
           { name: "🌟 マイル ➔ 🎫 図鑑チケット (100ptで1枚)", value: "miles_to_ticket" },
-          { name: "🔔 ベル ➔ 🎫 図鑑チケット (500ベルで1枚)", value: "to_ticket" },
-          { name: "🎫 図鑑チケット ➔ 🔔 ベル (1枚で500ベル)", value: "to_coin" }
+          { name: "🪙 ゼニー ➔ 🎫 図鑑チケット (500ゼニーで1枚)", value: "to_ticket" },
+          { name: "🎫 図鑑チケット ➔ 🪙 ゼニー (1枚で500ゼニー)", value: "to_coin" }
         )
     )
     .addIntegerOption((option) =>
       option
         .setName("amount")
-        .setDescription("交換する数量（チケット枚数、またはベル数に応じた数量）")
+        .setDescription("交換する数量（チケット枚数、またはゼニー数に応じた数量）")
         .setRequired(false)
         .setMinValue(1)
     ),
@@ -75,32 +75,32 @@ export const command = {
 
       await interaction.followUp({ embeds: [embed] });
     } else if (action === "to_ticket") {
-      // 必要なベル
+      // 必要なゼニー
       const requiredBells = amount * bellRate;
       if (manybotBalance < requiredBells) {
         const errorEmbed = createBaseEmbed(
-          "⚠️ ベル不足",
-          `チケット **${amount}** 枚と交換するには **${requiredBells.toLocaleString()}** ベルが必要です。\n（現在の所持ベル: **${manybotBalance.toLocaleString()}** ベル）`,
+          "⚠️ ゼニー不足",
+          `チケット **${amount}** 枚と交換するには **${requiredBells.toLocaleString()}** ゼニーが必要です。\n（現在の所持ゼニー: **${manybotBalance.toLocaleString()}** ゼニー）`,
           "#E74C3C"
         );
         await interaction.followUp({ embeds: [errorEmbed] });
         return;
       }
 
-      // ベル減額 ＆ チケット増額
+      // ゼニー減額 ＆ チケット増額
       await addManybotBalance(guildId, userId, -requiredBells);
       const newTickets = await addTickets(guildId, userId, amount);
       const newBalance = await getManybotBalance(guildId, userId);
 
       const embed = createBaseEmbed(
-        "🔀 ベル両替完了！",
-        `**${requiredBells.toLocaleString()}** ベル を消費して、**図鑑チケット ×${amount}** を入手しました！`,
+        "🔀 ゼニー両替完了！",
+        `**${requiredBells.toLocaleString()}** ゼニー を消費して、**図鑑チケット ×${amount}** を入手しました！`,
         "#F1C40F"
       );
 
       embed.addFields(
         { name: "🎫 所持チケット", value: `**${newTickets}** 枚`, inline: true },
-        { name: "🔔 ベル残高", value: `**${newBalance.toLocaleString()}** ベル`, inline: true }
+        { name: "🪙 ゼニー残高", value: `**${newBalance.toLocaleString()}** ゼニー`, inline: true }
       );
 
       await interaction.followUp({ embeds: [embed] });
@@ -117,7 +117,7 @@ export const command = {
 
       const gainedBells = amount * bellRate;
 
-      // チケット減額 ＆ ベル増額
+      // チケット減額 ＆ ゼニー増額
       await addTickets(guildId, userId, -amount);
       await addManybotBalance(guildId, userId, gainedBells);
 
@@ -125,14 +125,14 @@ export const command = {
       const newBalance = await getManybotBalance(guildId, userId);
 
       const embed = createBaseEmbed(
-        "🔀 ベル換金完了！",
-        `**図鑑チケット ×${amount}** を消費して、**${gainedBells.toLocaleString()}** ベル を獲得しました！`,
+        "🔀 ゼニー換金完了！",
+        `**図鑑チケット ×${amount}** を消費して、**${gainedBells.toLocaleString()}** ゼニー を獲得しました！`,
         "#F1C40F"
       );
 
       embed.addFields(
         { name: "🎫 所持チケット", value: `**${newTickets}** 枚`, inline: true },
-        { name: "🔔 ベル残高", value: `**${newBalance.toLocaleString()}** ベル`, inline: true }
+        { name: "🪙 ゼニー残高", value: `**${newBalance.toLocaleString()}** ゼニー`, inline: true }
       );
 
       await interaction.followUp({ embeds: [embed] });

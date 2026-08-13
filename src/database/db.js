@@ -147,9 +147,17 @@ export async function initDatabase() {
         reason TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      // 8. どうぶつの森Bot 設定テーブル
+      CREATE TABLE IF NOT EXISTS doumori_settings (
+        guild_id BIGINT,
+        setting_key TEXT,
+        setting_value TEXT,
+        PRIMARY KEY (guild_id, setting_key)
+      );
     `);
 
-    console.log("✅ doumori データベーススキーマ（マイル・ミッション・履歴ログ含む）の初期化が完了しました。");
+    console.log("✅ doumori データベーススキーマ（マイル・ミッション・設定含む）の初期化が完了しました。");
   } catch (error) {
     console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
@@ -603,3 +611,43 @@ export async function getLeaderboard(guildId, totalCount) {
   );
   return res.rows;
 }
+
+/**
+ * どうぶつの森林 設定の取得
+ */
+export async function getDoumoriSettings(guildId) {
+  try {
+    const res = await doumoriPool.query(
+      "SELECT setting_key, setting_value FROM doumori_settings WHERE guild_id = $1",
+      [guildId]
+    );
+    const settings = {};
+    for (const row of res.rows) {
+      try {
+        settings[row.setting_key] = JSON.parse(row.setting_value);
+      } catch {
+        settings[row.setting_key] = row.setting_value;
+      }
+    }
+    return settings;
+  } catch (err) {
+    return {};
+  }
+}
+
+/**
+ * どうぶつの森林 設定の保存
+ */
+export async function saveDoumoriSettings(guildId, settingsObj) {
+  for (const [key, value] of Object.entries(settingsObj)) {
+    const strVal = typeof value === "object" ? JSON.stringify(value) : String(value);
+    await doumoriPool.query(
+      `INSERT INTO doumori_settings (guild_id, setting_key, setting_value)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (guild_id, setting_key)
+       DO UPDATE SET setting_value = $3`,
+      [guildId, key, strVal]
+    );
+  }
+}
+

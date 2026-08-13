@@ -55,7 +55,7 @@ export const command = {
     embed.addFields(
       { name: "🌟 所持マイル", value: `**${userMiles.miles.toLocaleString()}** pt`, inline: true },
       { name: "🎫 所持チケット", value: `**${userData.tickets}** 枚`, inline: true },
-      { name: "🔔 鯖内通貨 (ベル)", value: `**${manybotBalance.toLocaleString()}** ベル`, inline: true },
+      { name: "🪙 鯖内通貨 (ゼニー)", value: `**${manybotBalance.toLocaleString()}** ゼニー`, inline: true },
       { name: "⏱️ 通算浮上時間", value: `**${totalHours}** 時間`, inline: true },
       { name: "🎒 所持道具", value: `・つりざお: **${rodCount}** 本\n・虫取り網: **${netCount}** 本`, inline: false },
       { name: "🐟 魚図鑑達成率", value: fishProgress, inline: false },

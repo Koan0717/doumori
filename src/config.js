@@ -7,12 +7,12 @@ export const CONFIG = {
 
   // exchange (通貨交換) のデフォルトレート
   EXCHANGE_RATES: {
-    MANYBOT_PER_TICKET: 500, // 500ベル = チケット1枚 (旧仕様互換)
+    MANYBOT_PER_TICKET: 500, // 500ゼニー = チケット1枚
     MILES_PER_TICKET: 100,   // 100マイル = チケット1枚 (マイル購入)
   },
 
   // 通貨名
-  CURRENCY_NAME: "ベル",
+  CURRENCY_NAME: "ゼニー",
 
   // 道具購入価格 (チケット数)
   ITEM_PRICES: {
@@ -32,7 +32,7 @@ export const CONFIG = {
     },
   },
 
-  // 売却額ベース (レア度別 ベル換算)
+  // 売却額ベース (レア度別 ゼニー換算)
   SELL_PRICES: {
     COMMON: 100,
     UNCOMMON: 300,
