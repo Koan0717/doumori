@@ -104,7 +104,7 @@ export const command = {
     }
 
     await interaction.followUp({
-      content: `${interaction.user.mention} さんの釣果です！${extraMsg}`,
+      content: `${interaction.user.toString()} さんの釣果です！${extraMsg}`,
       embeds: [embed],
     });
   },

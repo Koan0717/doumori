@@ -56,7 +56,7 @@ export const command = {
 
     const embed = createBaseEmbed(
       `🛠️ DIY作業台 - 住民主催イベント告知！`,
-      `主催者: ${interaction.user.mention}\n\n**【${title}】**\n\n*${details}*`,
+      `主催者: ${interaction.user.toString()}\n\n**【${title}】**\n\n*${details}*`,
       "#9B59B6"
     );
 

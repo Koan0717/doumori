@@ -3,6 +3,7 @@ import { FISH_LIST } from "../data/fish.js";
 import { BUG_LIST } from "../data/bugs.js";
 import {
   getUser,
+  getUserMiles,
   getManybotBalance,
   getItemCount,
   getUserCollection,
