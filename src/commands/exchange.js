@@ -11,6 +11,7 @@ import {
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("両替")
     .setDescription("マイルやゼニーを使って図鑑チケットと交換・両替します🔀")
@@ -35,7 +36,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

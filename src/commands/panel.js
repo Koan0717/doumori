@@ -8,6 +8,7 @@ import {
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("パネル設置")
     .setDescription("このチャンネルに全機能がボタン操作できる【総合操作パネル】を設置します🎮")

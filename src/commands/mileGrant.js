@@ -4,6 +4,7 @@ import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("マイル付与")
     .setDescription("【管理者専用】指定した住民にマイルポイントを手動で付与します🎁")

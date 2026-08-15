@@ -5,6 +5,7 @@ import { getLeaderboard } from "../database/db.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("ランキング")
     .setDescription("サーバー内の図鑑完成率ランキングを表示します🏆"),

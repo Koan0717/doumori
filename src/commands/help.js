@@ -2,13 +2,14 @@ import { SlashCommandBuilder } from "discord.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("ヘルプ")
     .setDescription("どうぶつの森林 Bot のコマンド一覧と遊び方のヘルプパネルを表示します📖"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const embed = createBaseEmbed(

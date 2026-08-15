@@ -6,13 +6,14 @@ import { doumoriPool, addManybotBalance, getManybotBalance } from "../database/d
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("売却")
     .setDescription("重複した生き物（2匹目以降）を売却して鯖内通貨(ゼニー)に換金します💰"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

@@ -10,13 +10,14 @@ import { getUserCollection } from "../database/db.js";
 import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("虫図鑑")
     .setDescription("虫図鑑と図鑑達成率を確認します🦋"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

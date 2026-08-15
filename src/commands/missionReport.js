@@ -17,6 +17,7 @@ import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("ミッション報告")
     .setDescription("ミッション達成のスクリーンショットを添えて報告します📸")

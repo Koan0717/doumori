@@ -32,6 +32,7 @@ export function buildResidentCardEmbed(cardData, targetUser) {
 }
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("住民カード")
     .setDescription("現在の階級・ミッション達成回数・ポイント等の【住民カード】を表示します🃏")
@@ -44,7 +45,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

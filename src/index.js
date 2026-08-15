@@ -118,7 +118,8 @@ client.on("interactionCreate", async (interaction) => {
 
     try {
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply().catch(() => {});
+        const isEphemeral = cmd.ephemeral !== undefined ? !!cmd.ephemeral : false;
+        await interaction.deferReply({ ephemeral: isEphemeral }).catch(() => {});
       }
       await cmd.execute(interaction);
     } catch (error) {

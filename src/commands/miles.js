@@ -4,13 +4,14 @@ import { getUserMiles } from "../database/db.js";
 import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("マイル")
     .setDescription("現在の所持マイルポイントと階級昇格状況を確認します🌟"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

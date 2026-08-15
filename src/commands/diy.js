@@ -4,6 +4,7 @@ import { getUserMiles, addMiles, updateLastDiyAt } from "../database/db.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("diy作業台")
     .setDescription("週1回、個人的なイベントを開催告知してマイルを獲得します🛠️")

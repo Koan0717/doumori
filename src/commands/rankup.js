@@ -5,6 +5,7 @@ import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("ランクアップ")
     .setDescription("貯まったマイルポイントを使って次の階級へ昇格します⬆️"),

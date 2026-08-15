@@ -11,6 +11,7 @@ import {
 import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("プロフィール")
     .setDescription("自分の図鑑収集状況・チケット・所持アイテムを確認します📊")
@@ -23,7 +24,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;

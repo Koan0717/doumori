@@ -3,6 +3,7 @@ import { getResidentCardData } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
 
 export const command = {
+  ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("マイル残高")
     .setDescription("現在の所持マイルポイントや住民カード情報を確認します🌟")
@@ -15,7 +16,7 @@ export const command = {
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply({ ephemeral: interaction.isButton() }).catch(() => {});
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
     }
 
     const guildId = interaction.guild.id;
