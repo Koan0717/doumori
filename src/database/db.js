@@ -482,9 +482,30 @@ export async function deleteMissionMaster(id) {
 /**
  * 1日3枠のデイリーミッション取得または自動生成
  */
+/**
+ * 1日あたりのデイリーミッション受注枠数を取得（ダッシュボード設定連動）
+ */
+export async function getDailyMissionSlotCount(guildId) {
+  try {
+    const res = await doumoriPool.query(
+      "SELECT setting_value FROM doumori_settings WHERE guild_id = $1 AND setting_key = 'daily_mission_slot_count'",
+      [guildId]
+    );
+    if (res.rows.length > 0) {
+      const val = parseInt(JSON.parse(res.rows[0].setting_value), 10);
+      if (!isNaN(val) && val >= 1 && val <= 10) return val;
+    }
+  } catch (e) {}
+  return CONFIG.DAILY_MISSION_SLOT_COUNT || 3;
+}
+
+/**
+ * デイリーミッション取得または自動生成（ダッシュボード設定の枠数分、ランダム選出）
+ */
 export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   // 本日の日付キー (JST: YYYY-MM-DD)
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
+  const targetSlotCount = await getDailyMissionSlotCount(guildId);
 
   // 1. 有効なミッションマスターを取得（ダッシュボードで設定されたミッション）
   let masterPoolRows = [];
@@ -505,6 +526,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     const fallbackTemplates = [
       { title: "VC交流", desc: "VCに通算30分以上参加する", miles: 100 },
       { title: "雑談チャット", desc: "雑談チャンネルで3回以上メッセージを発言する", miles: 100 },
+      { title: "魚釣り挑戦", desc: "`/釣り` で魚を1匹以上釣り上げる", miles: 100 },
     ];
     masterPoolRows = fallbackTemplates.map((t, idx) => ({
       id: idx + 1,
@@ -513,6 +535,9 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
       reward_miles: t.miles || 100,
     }));
   }
+
+  // 重複を避けつつランダムにシャッフル
+  const shuffled = [...masterPoolRows].sort(() => Math.random() - 0.5);
 
   // 2. 本日の既存ミッションを取得
   const res = await doumoriPool.query(
@@ -524,18 +549,18 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
 
   const masterTitles = new Set(masterPoolRows.map((m) => m.title));
 
-  // ダッシュボードに存在しない古いミッション（魚釣り等）がpendingのまま残っている、または3枠未満の場合はpendingを削除して再同期
+  // ダッシュボードに存在しない古いミッションがpendingのまま残っている、または目標枠数に満たない場合はpendingを削除して再同期
   const hasOutdatedPending = (res.rows || []).some(
     (r) => r.status === "pending" && !masterTitles.has(r.mission_title)
   );
 
-  if (hasOutdatedPending || !res.rows || res.rows.length < 3) {
+  if (hasOutdatedPending || !res.rows || res.rows.length < targetSlotCount) {
     await doumoriPool.query(
       `DELETE FROM doumori_daily_missions
        WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status = 'pending'`,
       [guildId, userId, todayStr]
     ).catch(() => {});
-  } else if (res.rows && res.rows.length >= 3) {
+  } else if (res.rows && res.rows.length >= targetSlotCount) {
     return res.rows;
   }
 
@@ -554,11 +579,13 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     await doumoriPool.query("ALTER TABLE doumori_daily_missions DROP CONSTRAINT IF EXISTS doumori_daily_missions_pkey");
   } catch (e) {}
 
-  // スロット1〜3を順に生成（ダッシュボードの登録ミッションのみから選出）
-  for (let slot = 1; slot <= 3; slot++) {
+  // スロット 1 〜 targetSlotCount をランダムシャッフルから順に生成
+  let shuffleIdx = 0;
+  for (let slot = 1; slot <= targetSlotCount; slot++) {
     if (existingSlots.has(slot)) continue;
 
-    const selected = masterPoolRows[(slot - 1) % masterPoolRows.length];
+    const selected = shuffled[shuffleIdx % shuffled.length];
+    shuffleIdx++;
 
     const title = selected.title || "デイリーミッション";
     const desc = selected.description || selected.desc || "ミッションを達成しよう！";
