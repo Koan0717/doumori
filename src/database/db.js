@@ -106,6 +106,7 @@ export async function initDatabase() {
     // 既存テーブルへのカラム追加（安全なマイグレーション）
     await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS mission_count INTEGER DEFAULT 0").catch(() => {});
     await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS total_mission_count INTEGER DEFAULT 0").catch(() => {});
+    await client.query("CREATE UNIQUE INDEX IF NOT EXISTS doumori_miles_uidx ON doumori_miles (guild_id, user_id)").catch(() => {});
 
     // 5. デイリーミッションテーブル (1日3枠対応)
     await client.query(`
@@ -119,8 +120,7 @@ export async function initDatabase() {
         mission_desc TEXT,
         reward_miles INTEGER DEFAULT 100,
         status TEXT DEFAULT 'pending',
-        proof_url TEXT,
-        PRIMARY KEY (guild_id, user_id, date_key, mission_slot)
+        proof_url TEXT
       );
     `);
 
@@ -128,6 +128,10 @@ export async function initDatabase() {
     await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_slot INTEGER DEFAULT 1").catch(() => {});
     await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_id INTEGER").catch(() => {});
     await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_title TEXT").catch(() => {});
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS doumori_daily_missions_slot_uidx
+      ON doumori_daily_missions (guild_id, user_id, date_key, mission_slot);
+    `).catch(() => {});
 
     // 6. ミッションマスターテーブル (ダッシュボード用ミッション管理)
     await client.query(`
@@ -533,12 +537,29 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     const miles = selected.reward_miles || selected.miles || 100;
     const mId = selected.id || null;
 
-    await doumoriPool.query(
-      `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
-       ON CONFLICT (guild_id, user_id, date_key, mission_slot) DO NOTHING`,
-      [guildId, userId, todayStr, slot, mId, title, desc, miles]
-    );
+    try {
+      await doumoriPool.query(
+        `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+         ON CONFLICT (guild_id, user_id, date_key, mission_slot) DO NOTHING`,
+        [guildId, userId, todayStr, slot, mId, title, desc, miles]
+      );
+    } catch (insertErr) {
+      // ON CONFLICT 制約がDB側にまだない場合の安全なフォールバック
+      const existCheck = await doumoriPool.query(
+        `SELECT id FROM doumori_daily_missions
+         WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot = $4 LIMIT 1`,
+        [guildId, userId, todayStr, slot]
+      ).catch(() => ({ rows: [] }));
+
+      if (existCheck.rows.length === 0) {
+        await doumoriPool.query(
+          `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+          [guildId, userId, todayStr, slot, mId, title, desc, miles]
+        ).catch((err) => console.error("Fallback insert error:", err));
+      }
+    }
 
     // 受注統計を加算
     if (mId) {

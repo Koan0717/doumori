@@ -44,13 +44,16 @@ export const command = {
       return;
     }
 
-    // ランク昇格処理 (現在の階級ミッション回数は新階級用にリセット)
+    // ランク昇格処理 (マイルを支払い、現在の階級ミッション回数は新階級用にリセット)
     await doumoriPool.query(
-      `INSERT INTO doumori_miles (guild_id, user_id, rank_level, mission_count)
-       VALUES ($1, $2, $3, 0)
+      `INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level, mission_count)
+       VALUES ($1, $2, 0, $3, 0)
        ON CONFLICT (guild_id, user_id)
-       DO UPDATE SET rank_level = $3, mission_count = 0`,
-      [guildId, userId, nextRank.level]
+       DO UPDATE SET
+         miles = GREATEST(0, doumori_miles.miles - $4),
+         rank_level = $3,
+         mission_count = 0`,
+      [guildId, userId, nextRank.level, nextRank.requiredMiles]
     );
 
     // サーバー内ロールの自動付与（既存の階級ロールがある場合は検索、なければ作成）
