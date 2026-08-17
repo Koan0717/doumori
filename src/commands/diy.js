@@ -28,8 +28,21 @@ export const command = {
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const title = interaction.options.getString("title");
-    const details = interaction.options.getString("details");
+    const title = interaction.options?.getString?.("title");
+    const details = interaction.options?.getString?.("details");
+
+    if (!title || !details) {
+      const guideEmbed = createBaseEmbed(
+        "🛠️ DIY作業台 - 住民主催イベント開催",
+        "DIY作業台でイベントを開催告知してマイルを獲得するには、スラッシュコマンドを使用してください！\n\n" +
+        "**【使用コマンド】**\n" +
+        "`/diy作業台 title:【イベント名】 details:【開催日時や内容】`\n\n" +
+        `※イベントを開催すると **+${CONFIG.DIY_EVENT_REWARD_MILES}** マイルを獲得できます（週1回まで）。`,
+        "#9B59B6"
+      );
+      await interaction.followUp({ embeds: [guideEmbed], ephemeral: true });
+      return;
+    }
 
     const userMiles = await getUserMiles(guildId, userId);
 

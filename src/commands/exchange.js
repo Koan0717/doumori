@@ -1,4 +1,10 @@
-import { SlashCommandBuilder } from "discord.js";
+import {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+} from "discord.js";
 import { CONFIG } from "../config.js";
 import {
   getUser,
@@ -41,15 +47,138 @@ export const command = {
 
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    const action = interaction.options ? (interaction.options.getString("action") || "miles_to_ticket") : "miles_to_ticket";
-    const amount = interaction.options ? (interaction.options.getInteger("amount") || 1) : 1;
+    const hasExplicitOption = interaction.options && interaction.options.getString("action");
+    let action = hasExplicitOption ? interaction.options.getString("action") : null;
+    let amount = (interaction.options && interaction.options.getInteger("amount")) || 1;
 
     const bellRate = CONFIG.EXCHANGE_RATES.MANYBOT_PER_TICKET || 500;
     const mileRate = CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100;
 
-    const manybotBalance = await getManybotBalance(guildId, userId);
-    const userMiles = await getUserMiles(guildId, userId);
-    const userData = await getUser(guildId, userId);
+    let manybotBalance = await getManybotBalance(guildId, userId);
+    let userMiles = await getUserMiles(guildId, userId);
+    let userData = await getUser(guildId, userId);
+
+    // オプション未指定（またはパネルボタンからの実行）時はインタラクティブメニューを表示
+    if (!action) {
+      const menuEmbed = createBaseEmbed(
+        "🔀 案内所両替所 - 両替メニュー",
+        "交換したい両替メニューを下のボタンから選択してください！\n\n" +
+        `・🌟 **マイル ➔ チケット**: **${mileRate}** pt ➔ チケット ×1\n` +
+        `・🪙 **ゼニー ➔ チケット**: **${bellRate.toLocaleString()}** ゼニー ➔ チケット ×1\n` +
+        `・🎫 **チケット ➔ ゼニー**: チケット ×1 ➔ **${bellRate.toLocaleString()}** ゼニー\n\n` +
+        "※複数枚をまとめて交換したい場合は `/両替 action:[種別] amount:[枚数]` を実行してください。",
+        "#3498DB"
+      );
+
+      menuEmbed.addFields(
+        { name: "🌟 所持マイル", value: `**${userMiles.miles.toLocaleString()}** pt`, inline: true },
+        { name: "🪙 ゼニー残高", value: `**${manybotBalance.toLocaleString()}** ゼニー`, inline: true },
+        { name: "🎫 所持チケット", value: `**${userData.tickets}** 枚`, inline: true }
+      );
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ex_miles_to_ticket")
+          .setLabel(`🌟 マイル➔チケット (${mileRate}pt)`)
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(userMiles.miles < mileRate),
+        new ButtonBuilder()
+          .setCustomId("ex_to_ticket")
+          .setLabel(`🪙 ゼニー➔チケット (${bellRate}z)`)
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(manybotBalance < bellRate),
+        new ButtonBuilder()
+          .setCustomId("ex_to_coin")
+          .setLabel(`🎫 チケット➔ゼニー (${bellRate}z)`)
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(userData.tickets < 1)
+      );
+
+      const replyMsg = await interaction.followUp({
+        embeds: [menuEmbed],
+        components: [row],
+      });
+
+      const collector = replyMsg.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 60000,
+      });
+
+      collector.on("collect", async (i) => {
+        if (i.user.id !== userId) {
+          await i.reply({ content: "他のユーザーの両替操作は行えません。", ephemeral: true });
+          return;
+        }
+
+        await i.deferUpdate();
+
+        if (i.customId === "ex_miles_to_ticket") {
+          const res = await buyTicketsWithMiles(guildId, userId, 1);
+          if (!res.success) {
+            await i.followUp({ content: `⚠️ マイルが不足しています（必要: ${res.needed}pt / 所持: ${res.current}pt）`, ephemeral: true });
+            return;
+          }
+        } else if (i.customId === "ex_to_ticket") {
+          const curBal = await getManybotBalance(guildId, userId);
+          if (curBal < bellRate) {
+            await i.followUp({ content: `⚠️ ゼニーが不足しています（必要: ${bellRate}ゼニー）`, ephemeral: true });
+            return;
+          }
+          await addManybotBalance(guildId, userId, -bellRate);
+          await addTickets(guildId, userId, 1);
+        } else if (i.customId === "ex_to_coin") {
+          const curUser = await getUser(guildId, userId);
+          if (curUser.tickets < 1) {
+            await i.followUp({ content: "⚠️ チケットが不足しています", ephemeral: true });
+            return;
+          }
+          await addTickets(guildId, userId, -1);
+          await addManybotBalance(guildId, userId, bellRate);
+        }
+
+        // 最新残高再取得
+        manybotBalance = await getManybotBalance(guildId, userId);
+        userMiles = await getUserMiles(guildId, userId);
+        userData = await getUser(guildId, userId);
+
+        const updatedEmbed = createBaseEmbed(
+          "✅ 両替が完了しました！",
+          "最新の所持残高は以下の通りです。",
+          "#2ECC71"
+        );
+        updatedEmbed.addFields(
+          { name: "🌟 所持マイル", value: `**${userMiles.miles.toLocaleString()}** pt`, inline: true },
+          { name: "🪙 ゼニー残高", value: `**${manybotBalance.toLocaleString()}** ゼニー`, inline: true },
+          { name: "🎫 所持チケット", value: `**${userData.tickets}** 枚`, inline: true }
+        );
+
+        const updatedRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("ex_miles_to_ticket")
+            .setLabel(`🌟 マイル➔チケット (${mileRate}pt)`)
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(userMiles.miles < mileRate),
+          new ButtonBuilder()
+            .setCustomId("ex_to_ticket")
+            .setLabel(`🪙 ゼニー➔チケット (${bellRate}z)`)
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(manybotBalance < bellRate),
+          new ButtonBuilder()
+            .setCustomId("ex_to_coin")
+            .setLabel(`🎫 チケット➔ゼニー (${bellRate}z)`)
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(userData.tickets < 1)
+        );
+
+        await i.editReply({ embeds: [updatedEmbed], components: [updatedRow] });
+      });
+
+      collector.on("end", async () => {
+        await interaction.editReply({ components: [] }).catch(() => {});
+      });
+
+      return;
+    }
 
     if (action === "miles_to_ticket") {
       const result = await buyTicketsWithMiles(guildId, userId, amount);

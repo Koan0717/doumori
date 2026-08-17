@@ -107,21 +107,98 @@ export async function initDatabase() {
     await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS mission_count INTEGER DEFAULT 0").catch(() => {});
     await client.query("ALTER TABLE doumori_miles ADD COLUMN IF NOT EXISTS total_mission_count INTEGER DEFAULT 0").catch(() => {});
 
-    // 5. デイリーミッションテーブル
+    // 5. デイリーミッションテーブル (1日3枠対応)
     await client.query(`
       CREATE TABLE IF NOT EXISTS doumori_daily_missions (
         guild_id BIGINT,
         user_id BIGINT,
         date_key TEXT,
+        mission_slot INTEGER DEFAULT 1,
+        mission_id INTEGER,
+        mission_title TEXT,
         mission_desc TEXT,
-        reward_miles INTEGER DEFAULT 30,
+        reward_miles INTEGER DEFAULT 100,
         status TEXT DEFAULT 'pending',
         proof_url TEXT,
-        PRIMARY KEY (guild_id, user_id, date_key)
+        PRIMARY KEY (guild_id, user_id, date_key, mission_slot)
       );
     `);
 
-    // 6. ミッション承認・処理履歴ログテーブル
+    // 既存テーブルへのカラム追加（安全なマイグレーション）
+    await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_slot INTEGER DEFAULT 1").catch(() => {});
+    await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_id INTEGER").catch(() => {});
+    await client.query("ALTER TABLE doumori_daily_missions ADD COLUMN IF NOT EXISTS mission_title TEXT").catch(() => {});
+
+    // 6. ミッションマスターテーブル (ダッシュボード用ミッション管理)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_missions_master (
+        id SERIAL PRIMARY KEY,
+        guild_id BIGINT DEFAULT 0,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        target_rank INTEGER DEFAULT 0,
+        reward_miles INTEGER DEFAULT 100,
+        is_active BOOLEAN DEFAULT TRUE,
+        times_assigned INTEGER DEFAULT 0,
+        times_completed INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 7. 階級・ランクマスターテーブル (ダッシュボード用ランク設定)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS doumori_ranks_master (
+        level INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        required_miles INTEGER NOT NULL,
+        color TEXT NOT NULL,
+        role_name TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 初期ランクデータの投入 (未存在時のみ)
+    const initialRanks = [
+      { level: 1, name: "🌱 新規住人", requiredMiles: 0, color: "#A8E6CF", roleName: "新規住人" },
+      { level: 2, name: "🏠 住人", requiredMiles: 4000, color: "#3498DB", roleName: "住人" },
+      { level: 3, name: "☕ 常連住人", requiredMiles: 15000, color: "#E67E22", roleName: "常連住人" },
+      { level: 4, name: "🌟 人気住人", requiredMiles: 45000, color: "#FFD700", roleName: "人気住人" },
+    ];
+    for (const r of initialRanks) {
+      await client.query(
+        `INSERT INTO doumori_ranks_master (level, name, required_miles, color, role_name)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (level) DO NOTHING`,
+        [r.level, r.name, r.requiredMiles, r.color, r.roleName]
+      ).catch(() => {});
+    }
+
+    // 初期ミッションマスターの投入 (未存在時のみ)
+    const mCheck = await client.query("SELECT COUNT(*) FROM doumori_missions_master");
+    if (parseInt(mCheck.rows[0].count, 10) === 0) {
+      const defaultMissions = [
+        { title: "VC交流", desc: "VCに通算30分以上参加する", rank: 0, miles: 100 },
+        { title: "雑談あいさつ", desc: "雑談チャンネルであいさつや会話を3回以上送信する", rank: 0, miles: 100 },
+        { title: "魚釣り挑戦", desc: "`/釣り` で魚を1匹以上釣り上げる", rank: 0, miles: 100 },
+        { title: "虫捕り挑戦", desc: "`/虫捕り` で虫を1匹以上捕まえる", rank: 0, miles: 100 },
+        { title: "ショップ利用", desc: "`/ショップ` または `/両替` を1回利用する", rank: 0, miles: 100 },
+        { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してゼニーにする", rank: 0, miles: 100 },
+        { title: "VC長時間滞在", desc: "VCに通算1時間以上参加してメンバーと交流する", rank: 0, miles: 100 },
+        { title: "レア生き物捕獲", desc: "レア度RARE以上の生き物を1匹捕獲する", rank: 0, miles: 100 },
+        { title: "図鑑チェック", desc: "`/魚図鑑` または `/虫図鑑` を確認してコレクションを広げる", rank: 0, miles: 100 },
+        { title: "イベント参加", desc: "DIY作業台イベントや鯖内イベントに参加・告知する", rank: 0, miles: 100 },
+      ];
+      for (const m of defaultMissions) {
+        await client.query(
+          `INSERT INTO doumori_missions_master (title, description, target_rank, reward_miles, is_active)
+           VALUES ($1, $2, $3, $4, TRUE)`,
+          [m.title, m.desc, m.rank, m.miles]
+        ).catch(() => {});
+      }
+    }
+
+    // 8. ミッション承認・処理履歴ログテーブル
     await client.query(`
       CREATE TABLE IF NOT EXISTS doumori_mission_logs (
         id SERIAL PRIMARY KEY,
@@ -135,7 +212,7 @@ export async function initDatabase() {
       );
     `);
 
-    // 7. マイル手動付与・没収ログテーブル (管理者用)
+    // 9. マイル手動付与・没収ログテーブル (管理者用)
     await client.query(`
       CREATE TABLE IF NOT EXISTS doumori_mile_logs (
         id SERIAL PRIMARY KEY,
@@ -148,7 +225,7 @@ export async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      // 8. どうぶつの森Bot 設定テーブル
+      -- 10. どうぶつの森Bot 設定テーブル
       CREATE TABLE IF NOT EXISTS doumori_settings (
         guild_id BIGINT,
         setting_key TEXT,
@@ -157,7 +234,7 @@ export async function initDatabase() {
       );
     `);
 
-    console.log("✅ doumori データベーススキーマ（マイル・ミッション・設定含む）の初期化が完了しました。");
+    console.log("✅ doumori データベーススキーマ（マイル・3枠ミッション・マスター含む）の初期化が完了しました。");
   } catch (error) {
     console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
@@ -297,45 +374,226 @@ export async function updateLastDiyAt(guildId, userId) {
 }
 
 /**
- * デイリーミッションの取得または自動生成
+ * 階級・ランクマスター一覧の取得（DBを優先、無ければCONFIGフォールバック）
  */
-export async function getOrCreateDailyMission(guildId, userId, rankLevel) {
+export async function getDoumoriRanksMaster() {
+  try {
+    const res = await doumoriPool.query(
+      "SELECT level, name, required_miles, color, role_name FROM doumori_ranks_master ORDER BY level ASC"
+    );
+    if (res.rows.length > 0) {
+      return res.rows.map((r) => ({
+        level: r.level,
+        name: r.name,
+        requiredMiles: parseInt(r.required_miles, 10),
+        color: r.color,
+        roleName: r.role_name,
+      }));
+    }
+  } catch (err) {
+    console.warn("⚠️ doumori_ranks_master fetch failed, fallback to CONFIG.RANKS:", err.message);
+  }
+  return CONFIG.RANKS;
+}
+
+/**
+ * 階級・ランクマスターの保存・更新
+ */
+export async function saveDoumoriRankMaster(level, rankData) {
+  const { name, requiredMiles, color, roleName } = rankData;
+  await doumoriPool.query(
+    `INSERT INTO doumori_ranks_master (level, name, required_miles, color, role_name, updated_at)
+     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+     ON CONFLICT (level)
+     DO UPDATE SET
+       name = EXCLUDED.name,
+       required_miles = EXCLUDED.required_miles,
+       color = EXCLUDED.color,
+       role_name = EXCLUDED.role_name,
+       updated_at = CURRENT_TIMESTAMP`,
+    [level, name, requiredMiles, color, roleName]
+  );
+}
+
+/**
+ * ミッションマスター一覧の取得 (ダッシュボード用)
+ */
+export async function getMissionsMaster(guildId = 0) {
+  const res = await doumoriPool.query(
+    `SELECT * FROM doumori_missions_master
+     WHERE guild_id = $1 OR guild_id = 0
+     ORDER BY is_active DESC, id ASC`,
+    [guildId]
+  );
+  return res.rows;
+}
+
+/**
+ * ミッションマスターの新規作成
+ */
+export async function createMissionMaster(guildId, data) {
+  const { title, description, target_rank = 0, reward_miles = 100 } = data;
+  const res = await doumoriPool.query(
+    `INSERT INTO doumori_missions_master (guild_id, title, description, target_rank, reward_miles, is_active)
+     VALUES ($1, $2, $3, $4, $5, TRUE)
+     RETURNING *`,
+    [guildId || 0, title, description, target_rank, reward_miles]
+  );
+  return res.rows[0];
+}
+
+/**
+ * ミッションマスターの更新
+ */
+export async function updateMissionMaster(id, data) {
+  const { title, description, target_rank, reward_miles, is_active } = data;
+  const res = await doumoriPool.query(
+    `UPDATE doumori_missions_master
+     SET title = COALESCE($1, title),
+         description = COALESCE($2, description),
+         target_rank = COALESCE($3, target_rank),
+         reward_miles = COALESCE($4, reward_miles),
+         is_active = COALESCE($5, is_active),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $6
+     RETURNING *`,
+    [title, description, target_rank, reward_miles, is_active, id]
+  );
+  return res.rows[0];
+}
+
+/**
+ * ミッションマスターの削除
+ */
+export async function deleteMissionMaster(id) {
+  await doumoriPool.query("DELETE FROM doumori_missions_master WHERE id = $1", [id]);
+}
+
+/**
+ * 1日3枠のデイリーミッション取得または自動生成
+ */
+export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   // 本日の日付キー (JST: YYYY-MM-DD)
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
 
   const res = await doumoriPool.query(
-    "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
+    `SELECT * FROM doumori_daily_missions
+     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
+     ORDER BY mission_slot ASC`,
     [guildId, userId, todayStr]
   );
 
-  if (res.rows.length > 0) {
-    return res.rows[0];
+  if (res.rows.length >= 3) {
+    return res.rows;
   }
 
-  // ランクに応じたミッションリストからランダム抽選
-  const templates = CONFIG.DAILY_MISSIONS[rankLevel] || CONFIG.DAILY_MISSIONS[1];
-  const selected = templates[Math.floor(Math.random() * templates.length)];
+  // 既存のスロット番号を取得
+  const existingSlots = new Set(res.rows.map((r) => r.mission_slot));
 
-  const insertRes = await doumoriPool.query(
-    `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_desc, reward_miles, status)
-     VALUES ($1, $2, $3, $4, $5, 'pending')
-     RETURNING *`,
-    [guildId, userId, todayStr, selected.desc, selected.miles]
+  // 有効なミッションマスターを取得
+  let masterPoolRows = [];
+  try {
+    const mRes = await doumoriPool.query(
+      `SELECT * FROM doumori_missions_master
+       WHERE (guild_id = $1 OR guild_id = 0) AND is_active = TRUE AND (target_rank = 0 OR target_rank = $2)`,
+      [guildId, rankLevel]
+    );
+    masterPoolRows = mRes.rows;
+  } catch (err) {
+    console.warn("⚠️ Master mission fetch error:", err);
+  }
+
+  // マスターが無ければデフォルトテンプレートから生成
+  if (masterPoolRows.length === 0) {
+    const fallbackTemplates = CONFIG.DAILY_MISSIONS[0] || CONFIG.DAILY_MISSIONS[1] || [
+      { title: "VC交流", desc: "VCに通算30分以上参加する", miles: 100 },
+      { title: "魚釣り挑戦", desc: "`/釣り` で魚を1匹以上釣り上げる", miles: 100 },
+      { title: "虫捕り挑戦", desc: "`/虫捕り` で虫を1匹以上捕まえる", miles: 100 },
+    ];
+    masterPoolRows = fallbackTemplates.map((t, idx) => ({
+      id: idx + 1,
+      title: t.title || "ミッション",
+      description: t.desc,
+      reward_miles: t.miles || 100,
+    }));
+  }
+
+  // シャッフルして選出
+  const shuffled = [...masterPoolRows].sort(() => Math.random() - 0.5);
+  let poolIdx = 0;
+
+  for (let slot = 1; slot <= 3; slot++) {
+    if (existingSlots.has(slot)) continue;
+
+    const selected = shuffled[poolIdx % shuffled.length];
+    poolIdx++;
+
+    const title = selected.title || "デイリーミッション";
+    const desc = selected.description || selected.desc || "ミッションを達成しよう！";
+    const miles = selected.reward_miles || selected.miles || 100;
+    const mId = selected.id || null;
+
+    await doumoriPool.query(
+      `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+       ON CONFLICT (guild_id, user_id, date_key, mission_slot) DO NOTHING`,
+      [guildId, userId, todayStr, slot, mId, title, desc, miles]
+    );
+
+    // 受注統計を加算
+    if (mId) {
+      await doumoriPool.query(
+        "UPDATE doumori_missions_master SET times_assigned = times_assigned + 1 WHERE id = $1",
+        [mId]
+      ).catch(() => {});
+    }
+  }
+
+  const finalRes = await doumoriPool.query(
+    `SELECT * FROM doumori_daily_missions
+     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
+     ORDER BY mission_slot ASC`,
+    [guildId, userId, todayStr]
   );
 
-  return insertRes.rows[0];
+  return finalRes.rows;
 }
 
 /**
- * デイリーミッションの報告送信
+ * 互換用: 単一デイリーミッション取得
+ */
+export async function getOrCreateDailyMission(guildId, userId, rankLevel) {
+  const missions = await getOrCreateDailyMissions(guildId, userId, rankLevel);
+  return missions[0];
+}
+
+/**
+ * デイリーミッションの報告送信（スロット指定または全スロット）
+ */
+export async function submitMissionReportSlot(guildId, userId, dateKey, slot = 0, proofUrl = "") {
+  if (slot > 0) {
+    await doumoriPool.query(
+      `UPDATE doumori_daily_missions
+       SET status = 'submitted', proof_url = $1
+       WHERE guild_id = $2 AND user_id = $3 AND date_key = $4 AND mission_slot = $5 AND status = 'pending'`,
+      [proofUrl, guildId, userId, dateKey, slot]
+    );
+  } else {
+    // 全スロット
+    await doumoriPool.query(
+      `UPDATE doumori_daily_missions
+       SET status = 'submitted', proof_url = $1
+       WHERE guild_id = $2 AND user_id = $3 AND date_key = $4 AND status = 'pending'`,
+      [proofUrl, guildId, userId, dateKey]
+    );
+  }
+}
+
+/**
+ * 互換用: ミッション報告送信
  */
 export async function submitMissionReport(guildId, userId, dateKey, proofUrl) {
-  await doumoriPool.query(
-    `UPDATE doumori_daily_missions
-     SET status = 'submitted', proof_url = $1
-     WHERE guild_id = $2 AND user_id = $3 AND date_key = $4`,
-    [proofUrl, guildId, userId, dateKey]
-  );
+  return submitMissionReportSlot(guildId, userId, dateKey, 0, proofUrl);
 }
 
 /**
@@ -364,27 +622,51 @@ export async function getResidentCardData(guildId, userId, member = null) {
 }
 
 /**
- * デイリーミッションの承認 ＆ マイル付与 ＆ 住民カードカウント自動更新 ＆ 履歴保存
+ * デイリーミッションの承認（スロット単位または全枠） ＆ マイル付与 ＆ 住民カードカウント自動更新 ＆ 履歴保存
  */
-export async function approveMissionReport(guildId, userId, dateKey, staffId = null, countMultiplier = 1, member = null) {
-  const res = await doumoriPool.query(
-    "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
-    [guildId, userId, dateKey]
-  );
+export async function approveMissionSlot(guildId, userId, dateKey, slot = 0, staffId = null, member = null) {
+  const queryStr = slot > 0
+    ? "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot = $4 AND status != 'approved'"
+    : "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status != 'approved'";
+  const params = slot > 0 ? [guildId, userId, dateKey, slot] : [guildId, userId, dateKey];
 
-  if (res.rows.length === 0 || res.rows[0].status === "approved") {
+  const res = await doumoriPool.query(queryStr, params);
+
+  if (res.rows.length === 0) {
     return null;
   }
 
-  const mission = res.rows[0];
-  const count = Math.max(1, parseInt(countMultiplier, 10) || 1);
-  const totalRewardMiles = (mission.reward_miles || 30) * count;
+  let totalRewardMiles = 0;
+  let approvedCount = 0;
+  const approvedMissions = [];
 
-  // ステータスを達成済みに更新
-  await doumoriPool.query(
-    "UPDATE doumori_daily_missions SET status = 'approved' WHERE guild_id = $1 AND user_id = $2 AND date_key = $3",
-    [guildId, userId, dateKey]
-  );
+  for (const m of res.rows) {
+    const miles = m.reward_miles || 100;
+    totalRewardMiles += miles;
+    approvedCount += 1;
+    approvedMissions.push(m);
+
+    // ステータスを達成済みに更新
+    await doumoriPool.query(
+      "UPDATE doumori_daily_missions SET status = 'approved' WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot = $4",
+      [guildId, userId, dateKey, m.mission_slot]
+    );
+
+    // ミッションマスターの達成統計を加算
+    if (m.mission_id) {
+      await doumoriPool.query(
+        "UPDATE doumori_missions_master SET times_completed = times_completed + 1 WHERE id = $1",
+        [m.mission_id]
+      ).catch(() => {});
+    }
+
+    // 処理履歴（ログ）をDBに保存
+    await doumoriPool.query(
+      `INSERT INTO doumori_mission_logs (guild_id, user_id, staff_id, mission_desc, reward_miles, mission_count)
+       VALUES ($1, $2, $3, $4, $5, 1)`,
+      [guildId, userId, staffId, m.mission_desc || m.mission_title, miles]
+    ).catch((err) => console.error("❌ Mission log save error:", err));
+  }
 
   // マイル加算 ＆ 階級ミッション回数 ＆ 累計ミッション回数の加算
   const updateRes = await doumoriPool.query(
@@ -396,23 +678,14 @@ export async function approveMissionReport(guildId, userId, dateKey, staffId = n
        mission_count = COALESCE(doumori_miles.mission_count, 0) + $4,
        total_mission_count = COALESCE(doumori_miles.total_mission_count, 0) + $4
      RETURNING miles, rank_level, mission_count, total_mission_count`,
-    [guildId, userId, totalRewardMiles, count]
+    [guildId, userId, totalRewardMiles, approvedCount]
   );
 
   const updatedMiles = updateRes.rows[0];
-
-  // 処理履歴（ログ）をDBに保存
-  await doumoriPool.query(
-    `INSERT INTO doumori_mission_logs (guild_id, user_id, staff_id, mission_desc, reward_miles, mission_count)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [guildId, userId, staffId, mission.mission_desc, totalRewardMiles, count]
-  ).catch((err) => console.error("❌ Mission log save error:", err));
-
   const rankInfo = resolveRankFromMember(member, updatedMiles.rank_level);
 
   return {
-    missionDesc: mission.mission_desc,
-    countMultiplier: count,
+    approvedCount,
     rewardMiles: totalRewardMiles,
     newMiles: updatedMiles.miles,
     rankLevel: rankInfo.level,
@@ -420,7 +693,15 @@ export async function approveMissionReport(guildId, userId, dateKey, staffId = n
     rankColor: rankInfo.color,
     missionCount: updatedMiles.mission_count,
     totalMissionCount: updatedMiles.total_mission_count,
+    missions: approvedMissions,
   };
+}
+
+/**
+ * 互換用: 旧approveMissionReport
+ */
+export async function approveMissionReport(guildId, userId, dateKey, staffId = null, countMultiplier = 1, member = null) {
+  return approveMissionSlot(guildId, userId, dateKey, 0, staffId, member);
 }
 
 /**

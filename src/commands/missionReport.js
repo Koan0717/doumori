@@ -8,9 +8,9 @@ import {
 } from "discord.js";
 import {
   getUserMiles,
-  getOrCreateDailyMission,
-  submitMissionReport,
-  approveMissionReport,
+  getOrCreateDailyMissions,
+  submitMissionReportSlot,
+  approveMissionSlot,
   getResidentCardData,
 } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
@@ -20,7 +20,7 @@ export const command = {
   ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("ミッション報告")
-    .setDescription("ミッション達成のスクリーンショットを添えて報告します📸")
+    .setDescription("デイリーミッション達成のスクリーンショットを添えて報告します📸")
     .addAttachmentOption((option) =>
       option
         .setName("screenshot")
@@ -29,11 +29,15 @@ export const command = {
     )
     .addIntegerOption((option) =>
       option
-        .setName("count")
-        .setDescription("ミッション達成回数 (省略時は1回)")
+        .setName("slot")
+        .setDescription("報告するミッション枠を選択してください（省略時はすべての未達成枠）")
         .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(10)
+        .addChoices(
+          { name: "1️⃣ ミッション ①", value: 1 },
+          { name: "2️⃣ ミッション ②", value: 2 },
+          { name: "3️⃣ ミッション ③", value: 3 },
+          { name: "✨ すべての未達成ミッション", value: 0 }
+        )
     ),
 
   async execute(interaction) {
@@ -44,7 +48,7 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
     const attachment = interaction.options.getAttachment("screenshot");
-    const count = interaction.options.getInteger("count") || 1;
+    const slot = interaction.options.getInteger("slot") ?? 0;
 
     // 画像形式チェック
     if (!attachment || !attachment.contentType || !attachment.contentType.startsWith("image/")) {
@@ -56,37 +60,49 @@ export const command = {
     }
 
     const userMiles = await getUserMiles(guildId, userId);
-    const mission = await getOrCreateDailyMission(guildId, userId, userMiles.rank_level);
+    const missions = await getOrCreateDailyMissions(guildId, userId, userMiles.rank_level);
 
-    if (mission.status === "approved") {
+    // 報告対象のミッションを特定
+    const targetMissions = slot > 0
+      ? missions.filter((m) => m.mission_slot === slot)
+      : missions.filter((m) => m.status !== "approved");
+
+    if (targetMissions.length === 0) {
       await interaction.followUp({
-        content: "✅ 本日のデイリーミッションはすでに達成・承認済みです！",
+        content: "✅ 該当するミッションはすべて既に達成・承認済みです！",
         ephemeral: true,
       });
       return;
     }
 
     // 報告を記録
-    await submitMissionReport(guildId, userId, mission.date_key, attachment.url);
+    const dateKey = targetMissions[0].date_key;
+    await submitMissionReportSlot(guildId, userId, dateKey, slot, attachment.url);
 
-    const totalExpectedMiles = (mission.reward_miles || 30) * count;
+    let totalExpectedMiles = 0;
+    let missionListText = "";
+    targetMissions.forEach((m) => {
+      const reward = m.reward_miles || 100;
+      totalExpectedMiles += reward;
+      missionListText += `・**[枠${m.mission_slot}] ${m.mission_title}**: ${m.mission_desc} (+${reward}pt)\n`;
+    });
 
     const embed = createBaseEmbed(
       "📸 デイリーミッション達成報告",
       `**報告者**: ${interaction.user.toString()}\n` +
-      `**ミッション内容**: ${mission.mission_desc}\n` +
-      `**達成回数**: **${count}** 回\n` +
-      `**付与予定ポイント**: **+${totalExpectedMiles}** pt`,
+      `**報告枠**: ${slot === 0 ? "すべての未達成ミッション" : `ミッション 枠${slot}`}\n\n` +
+      `**【対象ミッション】**\n${missionListText}\n` +
+      `💰 **付与予定ポイント**: **+${totalExpectedMiles}** pt`,
       "#3498DB"
     );
 
     embed.setImage(attachment.url);
-    embed.setFooter({ text: `提出日: ${mission.date_key} | 運営スタッフの承認をお待ちください` });
+    embed.setFooter({ text: `提出日: ${dateKey} | 運営スタッフの承認をお待ちください` });
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`approve_${userId}_${mission.date_key}`)
-        .setLabel(`✅ 承認する (+${totalExpectedMiles}pt / +${count}回)`)
+        .setCustomId(`approve_${userId}_${dateKey}_${slot}`)
+        .setLabel(`✅ 承認する (+${totalExpectedMiles}pt / ${targetMissions.length}枠)`)
         .setStyle(ButtonStyle.Success)
     );
 
@@ -115,7 +131,7 @@ export const command = {
         ? await interaction.guild.members.fetch(userId).catch(() => interaction.member)
         : interaction.member;
 
-      const result = await approveMissionReport(guildId, userId, mission.date_key, i.user.id, count, reportMember);
+      const result = await approveMissionSlot(guildId, userId, dateKey, slot, i.user.id, reportMember);
       if (!result) {
         await i.followUp({ content: "すでに承認済みです。", ephemeral: true });
         return;
@@ -130,7 +146,7 @@ export const command = {
         `**承認スタッフ**: ${i.user.toString()}\n` +
         `**対象者**: ${interaction.user.toString()}\n\n` +
         `💰 **獲得ポイント**: **+${result.rewardMiles}** pt\n` +
-        `📈 **ミッション達成**: **+${result.countMultiplier}** 回\n` +
+        `📈 **承認ミッション枠数**: **${result.approvedCount}** 枠\n` +
         `📝 **処理履歴**: 記録完了\n` +
         `🃏 **住民カード**: 最新情報に自動更新されました！`,
         "#2ECC71"

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
-import { CONFIG, resolveRankFromMember } from "../config.js";
-import { getUserMiles } from "../database/db.js";
+import { resolveRankFromMember } from "../config.js";
+import { getUserMiles, getDoumoriRanksMaster } from "../database/db.js";
 import { createBaseEmbed, createProgressBar } from "../utils/embedBuilder.js";
 
 export const command = {
@@ -17,9 +17,10 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
+    const ranks = await getDoumoriRanksMaster();
     const userMiles = await getUserMiles(guildId, userId);
     const currentRank = resolveRankFromMember(interaction.member, userMiles.rank_level);
-    const nextRank = CONFIG.RANKS.find((r) => r.level === currentRank.level + 1);
+    const nextRank = ranks.find((r) => r.level === currentRank.level + 1);
 
     const embed = createBaseEmbed(
       "🌟 マイルポイント & 階級ステータス",

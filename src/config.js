@@ -42,39 +42,36 @@ export const CONFIG = {
     SHINY_MULTIPLIER: 5,
   },
 
-  // 🌟 ステップアップ階級設定 (レベル, 階級名, 必要マイル, カラー)
+  // 🌟 ステップアップ階級設定 (レベル, 階級名, 必要マイル, カラー, デフォルトロール名)
   RANKS: [
-    { level: 1, name: "🌱 新規住人", requiredMiles: 0, color: "#A8E6CF" },
-    { level: 2, name: "🏠 住人", requiredMiles: 300, color: "#3498DB" },
-    { level: 3, name: "☕ 常連住人", requiredMiles: 800, color: "#E67E22" },
-    { level: 4, name: "🌟 人気住人", requiredMiles: 1500, color: "#FFD700" },
+    { level: 1, name: "🌱 新規住人", requiredMiles: 0, color: "#A8E6CF", roleName: "新規住人" },
+    { level: 2, name: "🏠 住人", requiredMiles: 4000, color: "#3498DB", roleName: "住人" },
+    { level: 3, name: "☕ 常連住人", requiredMiles: 15000, color: "#E67E22", roleName: "常連住人" },
+    { level: 4, name: "🌟 人気住人", requiredMiles: 45000, color: "#FFD700", roleName: "人気住人" },
   ],
 
   // DIY作業台 (イベント開催) の報酬マイル & クールダウン (7日間)
   DIY_EVENT_REWARD_MILES: 150,
   DIY_COOLDOWN_DAYS: 7,
 
-  // ランク別 デイリーミッション テンプレート
+  // 1日あたりのミッション受注枠数
+  DAILY_MISSION_SLOT_COUNT: 3,
+  // 1ミッションあたりの基本報酬マイル
+  DEFAULT_MISSION_REWARD_MILES: 100,
+
+  // ランク別 デイリーミッション デフォルトテンプレート (1ミッション100マイル)
   DAILY_MISSIONS: {
-    1: [
-      { desc: "VCに通算30分以上参加する", miles: 30 },
-      { desc: "挨拶メッセージを雑談チャンネルで3回送信する", miles: 20 },
-      { desc: "`/釣り` で魚を1匹以上釣り上げる", miles: 30 },
-    ],
-    2: [
-      { desc: "VCに通算1時間以上参加する", miles: 50 },
-      { desc: "`/虫捕り` で虫を2匹以上捕まえる", miles: 40 },
-      { desc: "メンバーとチャットで10回以上発言する", miles: 40 },
-    ],
-    3: [
-      { desc: "VCで他のメンバーと通算2時間以上交流する", miles: 70 },
-      { desc: "`/両替` または `/売却` を1回実行する", miles: 50 },
-      { desc: "レア度RARE以上の生き物を1匹捕獲する", miles: 80 },
-    ],
-    4: [
-      { desc: "VCに通算3時間以上滞在する", miles: 100 },
-      { desc: "図鑑でまだ持っていない生き物を新しく1匹捕まえる", miles: 120 },
-      { desc: "イベントまたはDIY作業台に参加・告知する", miles: 100 },
+    0: [
+      { title: "VC交流", desc: "VCに通算30分以上参加する", miles: 100 },
+      { title: "あいさつ", desc: "雑談チャンネルであいさつや会話を3回以上送信する", miles: 100 },
+      { title: "魚釣り", desc: "`/釣り` で魚を1匹以上釣り上げる", miles: 100 },
+      { title: "虫捕り", desc: "`/虫捕り` で虫を1匹以上捕まえる", miles: 100 },
+      { title: "ショップ利用", desc: "`/ショップ` または `/両替` を1回利用する", miles: 100 },
+      { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してゼニーにする", miles: 100 },
+      { title: "VC長時間滞在", desc: "VCに通算1時間以上参加してメンバーと交流する", miles: 100 },
+      { title: "レア捕獲", desc: "レア度RARE以上の生き物を1匹捕獲する", miles: 100 },
+      { title: "図鑑確認", desc: "`/魚図鑑` または `/虫図鑑` を確認してコレクションを増やす", miles: 100 },
+      { title: "イベント参加", desc: "DIY作業台イベントや鯖内イベントに参加する", miles: 100 },
     ],
   },
 };
@@ -84,7 +81,9 @@ export const CONFIG = {
  */
 export function resolveRankFromMember(member, defaultRankLevel = 1) {
   if (member && member.roles && member.roles.cache) {
-    const roleNames = member.roles.cache.map((r) => r.name);
+    const roleNames = typeof member.roles.cache.map === "function"
+      ? member.roles.cache.map((r) => r.name)
+      : Array.from(member.roles.cache.values()).map((r) => r.name);
 
     // 1. 人気住人ロール判定 (Level 4)
     const popularRole = roleNames.find((name) => name.includes("人気住人") || name.includes("人気住民"));

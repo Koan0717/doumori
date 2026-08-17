@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
-import { CONFIG, resolveRankFromMember } from "../config.js";
-import { getUserMiles, doumoriPool, getResidentCardData } from "../database/db.js";
+import { resolveRankFromMember } from "../config.js";
+import { getUserMiles, doumoriPool, getResidentCardData, getDoumoriRanksMaster } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
@@ -18,9 +18,10 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
+    const ranks = await getDoumoriRanksMaster();
     const userMiles = await getUserMiles(guildId, userId);
     const currentRank = resolveRankFromMember(interaction.member, userMiles.rank_level);
-    const nextRank = CONFIG.RANKS.find((r) => r.level === currentRank.level + 1);
+    const nextRank = ranks.find((r) => r.level === currentRank.level + 1);
 
     if (!nextRank) {
       const maxEmbed = createBaseEmbed(
