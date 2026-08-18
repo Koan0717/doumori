@@ -7,12 +7,12 @@ export const CONFIG = {
 
   // exchange (通貨交換) のデフォルトレート
   EXCHANGE_RATES: {
-    MANYBOT_PER_TICKET: 500, // 500ゼニー = チケット1枚
+    MANYBOT_PER_TICKET: 500, // 500ベル = チケット1枚
     MILES_PER_TICKET: 100,   // 100マイル = チケット1枚 (マイル購入)
   },
 
   // 通貨名
-  CURRENCY_NAME: "ゼニー",
+  CURRENCY_NAME: "ベル",
 
   // 道具購入価格 (チケット数)
   ITEM_PRICES: {
@@ -32,7 +32,7 @@ export const CONFIG = {
     },
   },
 
-  // 売却額ベース (レア度別 ゼニー換算)
+  // 売却額ベース (レア度別 ベル換算)
   SELL_PRICES: {
     COMMON: 100,
     UNCOMMON: 300,
@@ -67,7 +67,7 @@ export const CONFIG = {
       { title: "魚釣り", desc: "`/釣り` で魚を1匹以上釣り上げる", miles: 100 },
       { title: "虫捕り", desc: "`/虫捕り` で虫を1匹以上捕まえる", miles: 100 },
       { title: "ショップ利用", desc: "`/ショップ` または `/両替` を1回利用する", miles: 100 },
-      { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してゼニーにする", miles: 100 },
+      { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してベルにする", miles: 100 },
       { title: "VC長時間滞在", desc: "VCに通算1時間以上参加してメンバーと交流する", miles: 100 },
       { title: "レア捕獲", desc: "レア度RARE以上の生き物を1匹捕獲する", miles: 100 },
       { title: "図鑑確認", desc: "`/魚図鑑` または `/虫図鑑` を確認してコレクションを増やす", miles: 100 },

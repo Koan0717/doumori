@@ -20,7 +20,7 @@ export function buildResidentCardEmbed(cardData, targetUser) {
     { name: "📈 ミッション達成", value: `**＋${cardData.missionCount}** 回`, inline: true },
     { name: "💰 ポイント (マイル)", value: `**${cardData.miles.toLocaleString()}** pt`, inline: true },
     { name: "🏆 累計ミッション", value: `**${cardData.totalMissionCount}** 回`, inline: true },
-    { name: "🪙 鯖内通貨 (ゼニー)", value: `**${cardData.bells.toLocaleString()}** ゼニー`, inline: true },
+    { name: "🪙 鯖内通貨 (ベル)", value: `**${cardData.bells.toLocaleString()}** ベル`, inline: true },
     { name: "🎫 所持チケット", value: `**${cardData.tickets}** 枚`, inline: true }
   );
 

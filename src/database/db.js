@@ -193,7 +193,7 @@ export async function initDatabase() {
         { title: "魚釣り挑戦", desc: "`/釣り` で魚を1匹以上釣り上げる", rank: 0, miles: 100 },
         { title: "虫捕り挑戦", desc: "`/虫捕り` で虫を1匹以上捕まえる", rank: 0, miles: 100 },
         { title: "ショップ利用", desc: "`/ショップ` または `/両替` を1回利用する", rank: 0, miles: 100 },
-        { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してゼニーにする", rank: 0, miles: 100 },
+        { title: "生き物売却", desc: "`/売却` で重複した生き物を売却してベルにする", rank: 0, miles: 100 },
         { title: "VC長時間滞在", desc: "VCに通算1時間以上参加してメンバーと交流する", rank: 0, miles: 100 },
         { title: "レア生き物捕獲", desc: "レア度RARE以上の生き物を1匹捕獲する", rank: 0, miles: 100 },
         { title: "図鑑チェック", desc: "`/魚図鑑` または `/虫図鑑` を確認してコレクションを広げる", rank: 0, miles: 100 },
