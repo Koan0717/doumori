@@ -39,7 +39,7 @@ export const command = {
       `📅 本日のデイリーミッション (全${missions.length}枠)`,
       isAllCompleted
         ? `🎉 **本日の全ミッションを完全制覇しました！** (合計 **+${totalMilesEarned}マイル** 獲得済み)`
-        : `1ミッション達成につき **100マイル** 付与されます（すべて達成で **+${totalMilesAvailable}マイル**）！\n進捗状況: **${completedCount} / ${missions.length}** クリア済み`,
+        : `ミッションを達成してマイルを獲得しましょう（全達成で **+${totalMilesAvailable}マイル**）！\n進捗状況: **${completedCount} / ${missions.length}** クリア済み`,
       embedColor
     );
 

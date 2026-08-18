@@ -427,13 +427,25 @@ export async function saveDoumoriRankMaster(level, rankData) {
 
 /**
  * ミッションマスター一覧の取得 (ダッシュボード用)
+ * サーバー独自のミッションが存在する場合はそれを返し、未設定時のみ初期デフォルト(guild_id = 0)を返す
  */
 export async function getMissionsMaster(guildId = 0) {
+  if (guildId && guildId !== 0 && guildId !== "0") {
+    const customRes = await doumoriPool.query(
+      `SELECT * FROM doumori_missions_master
+       WHERE guild_id = $1
+       ORDER BY is_active DESC, id ASC`,
+      [guildId]
+    );
+    if (customRes.rows.length > 0) {
+      return customRes.rows;
+    }
+  }
+
   const res = await doumoriPool.query(
     `SELECT * FROM doumori_missions_master
-     WHERE guild_id = $1 OR guild_id = 0
-     ORDER BY is_active DESC, id ASC`,
-    [guildId]
+     WHERE guild_id = 0 OR guild_id IS NULL
+     ORDER BY is_active DESC, id ASC`
   );
   return res.rows;
 }
@@ -480,19 +492,23 @@ export async function deleteMissionMaster(id) {
 }
 
 /**
- * 1日3枠のデイリーミッション取得または自動生成
- */
-/**
  * 1日あたりのデイリーミッション受注枠数を取得（ダッシュボード設定連動）
  */
 export async function getDailyMissionSlotCount(guildId) {
   try {
     const res = await doumoriPool.query(
-      "SELECT setting_value FROM doumori_settings WHERE guild_id = $1 AND setting_key = 'daily_mission_slot_count'",
+      "SELECT setting_value FROM doumori_settings WHERE (guild_id = $1 OR guild_id = 0) AND setting_key = 'daily_mission_slot_count' ORDER BY guild_id DESC LIMIT 1",
       [guildId]
     );
     if (res.rows.length > 0) {
-      const val = parseInt(JSON.parse(res.rows[0].setting_value), 10);
+      let raw = res.rows[0].setting_value;
+      let parsed;
+      try {
+        parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      } catch {
+        parsed = raw;
+      }
+      const val = parseInt(parsed, 10);
       if (!isNaN(val) && val >= 1 && val <= 10) return val;
     }
   } catch (e) {}
@@ -505,23 +521,49 @@ export async function getDailyMissionSlotCount(guildId) {
 export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   // 本日の日付キー (JST: YYYY-MM-DD)
   const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().split("T")[0];
-  const targetSlotCount = await getDailyMissionSlotCount(guildId);
 
-  // 1. 有効なミッションマスターを取得（ダッシュボードで設定されたミッション）
+  // 1. 有効なミッションマスターを取得（サーバー専用設定を最優先、無ければグローバル/デフォルト）
   let masterPoolRows = [];
   try {
-    const mRes = await doumoriPool.query(
-      `SELECT * FROM doumori_missions_master
-       WHERE (guild_id = $1 OR guild_id = 0) AND is_active = TRUE AND (target_rank = 0 OR target_rank = $2)
-       ORDER BY id ASC`,
-      [guildId, rankLevel]
-    );
-    masterPoolRows = mRes.rows || [];
+    // サーバー固有の有効ミッションをまず検索
+    if (guildId && guildId !== 0 && guildId !== "0") {
+      const customRankRes = await doumoriPool.query(
+        `SELECT * FROM doumori_missions_master
+         WHERE guild_id = $1 AND is_active = TRUE AND (target_rank = 0 OR target_rank = $2)
+         ORDER BY id ASC`,
+        [guildId, rankLevel]
+      );
+      if (customRankRes.rows && customRankRes.rows.length > 0) {
+        masterPoolRows = customRankRes.rows;
+      } else {
+        // ランク指定なしでもサーバー専用ミッションがあるか確認
+        const customAllRes = await doumoriPool.query(
+          `SELECT * FROM doumori_missions_master
+           WHERE guild_id = $1 AND is_active = TRUE
+           ORDER BY id ASC`,
+          [guildId]
+        );
+        if (customAllRes.rows && customAllRes.rows.length > 0) {
+          masterPoolRows = customAllRes.rows;
+        }
+      }
+    }
+
+    // サーバー専用が未設定の場合は guild_id = 0 の共通ミッションを使用
+    if (masterPoolRows.length === 0) {
+      const globalRes = await doumoriPool.query(
+        `SELECT * FROM doumori_missions_master
+         WHERE (guild_id = 0 OR guild_id IS NULL) AND is_active = TRUE AND (target_rank = 0 OR target_rank = $1)
+         ORDER BY id ASC`,
+        [rankLevel]
+      );
+      masterPoolRows = globalRes.rows || [];
+    }
   } catch (err) {
     console.warn("⚠️ Master mission fetch error:", err);
   }
 
-  // マスターが無ければデフォルトテンプレートから生成
+  // それでもマスターが無ければフォールバックテンプレートから生成
   if (masterPoolRows.length === 0) {
     const fallbackTemplates = [
       { title: "VC交流", desc: "VCに通算30分以上参加する", miles: 100 },
@@ -536,10 +578,11 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     }));
   }
 
-  // 重複を避けつつランダムにシャッフル
-  const shuffled = [...masterPoolRows].sort(() => Math.random() - 0.5);
+  // 設定された目標スロット数を取得（ただしマスター件数を上限として調整）
+  const configuredSlotCount = await getDailyMissionSlotCount(guildId);
+  const targetSlotCount = Math.max(1, Math.min(configuredSlotCount, masterPoolRows.length));
 
-  // 2. 本日の既存ミッションを取得
+  // 2. 本日の既存デイリーミッションを取得
   const res = await doumoriPool.query(
     `SELECT * FROM doumori_daily_missions
      WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
@@ -547,45 +590,74 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     [guildId, userId, todayStr]
   ).catch(() => ({ rows: [] }));
 
-  const masterTitles = new Set(masterPoolRows.map((m) => m.title));
+  const currentRows = res.rows || [];
+  const activeMasterIds = new Set(masterPoolRows.map((m) => m.id));
+  const activeMasterTitles = new Set(masterPoolRows.map((m) => m.title));
 
-  // ダッシュボードに存在しない古いミッションがpendingのまま残っている、または目標枠数に満たない場合はpendingを削除して再同期
-  const hasOutdatedPending = (res.rows || []).some(
-    (r) => r.status === "pending" && !masterTitles.has(r.mission_title)
-  );
+  // 既存のpendingスロットのうち、以下に該当するものを検知してクリーンアップ
+  // 1. スロット番号が現在の targetSlotCount を超えている
+  // 2. ミッションIDまたはタイトルが現在の有効マスタープールに存在しない (変更・削除・無効化された)
+  // 3. 全体スロット数が targetSlotCount と一致していない
+  const hasOutdatedPending = currentRows.some((r) => {
+    if (r.status !== "pending") return false;
+    if (r.mission_slot > targetSlotCount) return true;
+    if (r.mission_id && !activeMasterIds.has(r.mission_id)) return true;
+    if (!r.mission_id && !activeMasterTitles.has(r.mission_title)) return true;
+    return false;
+  });
 
-  if (hasOutdatedPending || !res.rows || res.rows.length < targetSlotCount) {
+  const shouldRefresh =
+    hasOutdatedPending ||
+    currentRows.length !== targetSlotCount ||
+    currentRows.some((r) => r.mission_slot > targetSlotCount);
+
+  if (shouldRefresh) {
+    // 枠数超過のpendingスロットを削除
     await doumoriPool.query(
       `DELETE FROM doumori_daily_missions
-       WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status = 'pending'`,
-      [guildId, userId, todayStr]
+       WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot > $4 AND status = 'pending'`,
+      [guildId, userId, todayStr, targetSlotCount]
     ).catch(() => {});
-  } else if (res.rows && res.rows.length >= targetSlotCount) {
-    return res.rows;
+
+    // 無効化・更新された古いpendingスロットを削除
+    if (hasOutdatedPending || currentRows.length < targetSlotCount) {
+      await doumoriPool.query(
+        `DELETE FROM doumori_daily_missions
+         WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status = 'pending'`,
+        [guildId, userId, todayStr]
+      ).catch(() => {});
+    }
   }
 
-  // 3. 再度残りのスロットを確認
-  const currentRes = await doumoriPool.query(
+  // 3. クリーンアップ後の最新スロット状況を取得
+  const checkRes = await doumoriPool.query(
     `SELECT * FROM doumori_daily_missions
-     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
+     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot <= $4
      ORDER BY mission_slot ASC`,
-    [guildId, userId, todayStr]
+    [guildId, userId, todayStr, targetSlotCount]
   ).catch(() => ({ rows: [] }));
 
-  const existingSlots = new Set((currentRes.rows || []).map((r) => r.mission_slot));
+  const savedRows = checkRes.rows || [];
+  const occupiedSlots = new Set(savedRows.map((r) => r.mission_slot));
+  const usedMasterIds = new Set(savedRows.map((r) => r.mission_id).filter(Boolean));
+  const usedTitles = new Set(savedRows.map((r) => r.mission_title));
 
-  // 古いPK制約を念のため削除
-  try {
-    await doumoriPool.query("ALTER TABLE doumori_daily_missions DROP CONSTRAINT IF EXISTS doumori_daily_missions_pkey");
-  } catch (e) {}
+  // まだ使われていないマスターミッションを優先抽出
+  const availableMasters = masterPoolRows.filter(
+    (m) => !usedMasterIds.has(m.id) && !usedTitles.has(m.title)
+  );
+  const shuffledAvailable = [...availableMasters].sort(() => Math.random() - 0.5);
+  const fallbackShuffled = [...masterPoolRows].sort(() => Math.random() - 0.5);
 
-  // スロット 1 〜 targetSlotCount をランダムシャッフルから順に生成
-  let shuffleIdx = 0;
+  let poolIdx = 0;
   for (let slot = 1; slot <= targetSlotCount; slot++) {
-    if (existingSlots.has(slot)) continue;
+    if (occupiedSlots.has(slot)) continue;
 
-    const selected = shuffled[shuffleIdx % shuffled.length];
-    shuffleIdx++;
+    // 重複を避けつつミッションを選出
+    const selected =
+      shuffledAvailable[poolIdx] ||
+      fallbackShuffled[poolIdx % fallbackShuffled.length];
+    poolIdx++;
 
     const title = selected.title || "デイリーミッション";
     const desc = selected.description || selected.desc || "ミッションを達成しよう！";
@@ -595,14 +667,14 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     try {
       await doumoriPool.query(
         `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+         ON CONFLICT DO NOTHING`,
         [guildId, userId, todayStr, slot, mId, title, desc, miles]
       );
     } catch (insertErr) {
       console.error(`Slot ${slot} insert error:`, insertErr);
     }
 
-    // 受注統計を加算
     if (mId) {
       await doumoriPool.query(
         "UPDATE doumori_missions_master SET times_assigned = times_assigned + 1 WHERE id = $1",
@@ -611,11 +683,12 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     }
   }
 
+  // 4. 最終結果をスロット順、targetSlotCount 上限で返却
   const finalRes = await doumoriPool.query(
     `SELECT * FROM doumori_daily_missions
-     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
+     WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot <= $4
      ORDER BY mission_slot ASC`,
-    [guildId, userId, todayStr]
+    [guildId, userId, todayStr, targetSlotCount]
   );
 
   return finalRes.rows || [];
