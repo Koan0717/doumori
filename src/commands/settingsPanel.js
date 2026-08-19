@@ -6,7 +6,6 @@ import {
   ChannelSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType,
   ChannelType,
 } from "discord.js";
 import { getDoumoriSettings, saveDoumoriSettings } from "../database/db.js";
@@ -30,49 +29,43 @@ function buildMainMenuEmbed(settings) {
   const mileRoles = formatRolesText(settings.mile_grant_role_ids);
   const ticketRoles = formatRolesText(settings.ticket_grant_role_ids);
   const staffRoles = formatRolesText(settings.mission_staff_role_ids);
-  const slotCount = settings.daily_mission_slot_count || 3;
   const ticketChannel = formatChannelText(settings.ticket_notify_channel_id);
   const missionChannel = formatChannelText(settings.mission_report_channel_id);
 
   const embed = createBaseEmbed(
     "⚙️ どうぶつの森林 - サーバー設定パネル",
-    "Botの各種ロール権限や受注枠数、通知先チャンネルを設定できます。\n下のメニューから設定したい項目を選択してください。",
+    "Botの各種ロール権限（付与・承認スタッフ・管理者）や通知先チャンネルを設定できます。\n下のメニューから設定したい項目を選択してください。\n*(※デイリーミッション枠数等はダッシュボードから設定可能です)*",
     "#2ECC71"
   );
 
   embed.addFields(
     {
-      name: "👑 管理者ロール (Bot全権限)",
+      name: "👑 管理者ロール (Bot全権限・設定操作)",
       value: adminRoles,
       inline: false,
     },
     {
-      name: "🌟 マイル付与ロール (マイル付与・没収操作)",
+      name: "🌟 マイル付与ロール (手動マイル付与・没収)",
       value: mileRoles,
       inline: false,
     },
     {
-      name: "🎫 チケット付与ロール (チケット付与・没収操作)",
+      name: "🎫 チケット付与ロール (手動チケット付与・没収)",
       value: ticketRoles,
       inline: false,
     },
     {
-      name: "📸 ミッション承認スタッフロール (報告承認)",
+      name: "📸 ミッション承認スタッフロール (達成報告承認)",
       value: staffRoles,
       inline: false,
     },
     {
-      name: "📅 デイリーミッション受注枠数",
-      value: `**${slotCount} 枠** / 日 (1〜30枠対応)`,
-      inline: true,
-    },
-    {
-      name: "🎫 チケット通知チャンネル",
+      name: "🎫 チケット獲得通知チャンネル",
       value: ticketChannel,
       inline: true,
     },
     {
-      name: "📸 ミッション報告チャンネル",
+      name: "📸 ミッション報告受付チャンネル",
       value: missionChannel,
       inline: true,
     }
@@ -112,12 +105,6 @@ function buildMainMenuComponents() {
         emoji: "📸",
       },
       {
-        label: "📅 デイリーミッション枠数設定",
-        description: "1日のデイリーミッション受注枠数 (1〜30枠) を設定",
-        value: "opt_daily_slot_count",
-        emoji: "📅",
-      },
-      {
         label: "📢 通知・報告チャンネル設定",
         description: "チケット獲得通知やミッション報告のチャンネルを設定",
         value: "opt_notify_channels",
@@ -132,7 +119,7 @@ export const command = {
   ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("設定パネル")
-    .setDescription("【管理者専用】Botのロール権限やミッション枠数、通知チャンネルを設定します⚙️"),
+    .setDescription("【管理者専用】Botのロール権限や通知チャンネルを設定します⚙️"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
@@ -299,56 +286,7 @@ export const command = {
             ],
           });
         }
-        // 5. デイリーミッション枠数設定 (1〜30枠)
-        else if (category === "opt_daily_slot_count") {
-          const current = settings.daily_mission_slot_count || 3;
-          const embed = createBaseEmbed(
-            "📅 デイリーミッション枠数設定 (1〜30枠)",
-            "**住民が毎日受注できるデイリーミッションの枠数を設定します。**\n\n" +
-            `現在の設定: **${current} 枠 / 日**\n\n` +
-            "※ 下のメニューから希望する枠数（1〜30枠）を選択してください。",
-            "#9B59B6"
-          );
-
-          // 1〜15枠
-          const slotSelect1 = new StringSelectMenuBuilder()
-            .setCustomId("slot_select_count_1")
-            .setPlaceholder("📅 枠数を選択 (1〜15枠)")
-            .addOptions(
-              Array.from({ length: 15 }, (_, idx) => ({
-                label: `${idx + 1} 枠 / 日`,
-                value: String(idx + 1),
-                default: current === idx + 1,
-              }))
-            );
-
-          // 16〜30枠
-          const slotSelect2 = new StringSelectMenuBuilder()
-            .setCustomId("slot_select_count_2")
-            .setPlaceholder("📅 枠数を選択 (16〜30枠)")
-            .addOptions(
-              Array.from({ length: 15 }, (_, idx) => ({
-                label: `${idx + 16} 枠 / 日`,
-                value: String(idx + 16),
-                default: current === idx + 16,
-              }))
-            );
-
-          const backBtn = new ButtonBuilder()
-            .setCustomId("btn_back_main")
-            .setLabel("🔙 メイン設定に戻る")
-            .setStyle(ButtonStyle.Secondary);
-
-          await i.editReply({
-            embeds: [embed],
-            components: [
-              new ActionRowBuilder().addComponents(slotSelect1),
-              new ActionRowBuilder().addComponents(slotSelect2),
-              new ActionRowBuilder().addComponents(backBtn),
-            ],
-          });
-        }
-        // 6. 通知・報告チャンネル設定
+        // 5. 通知・報告チャンネル設定
         else if (category === "opt_notify_channels") {
           const ticketChannel = formatChannelText(settings.ticket_notify_channel_id);
           const missionChannel = formatChannelText(settings.mission_report_channel_id);
@@ -417,24 +355,7 @@ export const command = {
         });
       }
 
-      // C. 枠数選択の保存
-      else if (i.isStringSelectMenu() && (i.customId === "slot_select_count_1" || i.customId === "slot_select_count_2")) {
-        const newSlot = parseInt(i.values[0], 10);
-        settings.daily_mission_slot_count = newSlot;
-        await saveDoumoriSettings(guildId, { daily_mission_slot_count: newSlot });
-
-        settings = await getDoumoriSettings(guildId);
-        const updatedEmbed = buildMainMenuEmbed(settings);
-        const updatedRows = buildMainMenuComponents();
-
-        await i.editReply({
-          content: `✅ **デイリーミッション枠数を ${newSlot} 枠に保存しました！**`,
-          embeds: [updatedEmbed],
-          components: updatedRows,
-        });
-      }
-
-      // D. チャンネル選択の保存
+      // C. チャンネル選択の保存
       else if (i.isChannelSelectMenu()) {
         const channelId = i.values[0];
 
@@ -457,7 +378,7 @@ export const command = {
         });
       }
 
-      // E. メインメニューに戻るボタン
+      // D. メインメニューに戻るボタン
       else if (i.isButton() && i.customId === "btn_back_main") {
         settings = await getDoumoriSettings(guildId);
         const mainEmbed = buildMainMenuEmbed(settings);
