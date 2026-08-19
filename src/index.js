@@ -26,6 +26,9 @@ import { command as cardCmd } from "./commands/card.js";
 import { command as mileGrantCmd } from "./commands/mileGrant.js";
 import { command as mileRevokeCmd } from "./commands/mileRevoke.js";
 import { command as mileBalanceCmd } from "./commands/mileBalance.js";
+import { command as settingsPanelCmd } from "./commands/settingsPanel.js";
+import { command as ticketGrantCmd } from "./commands/ticketGrant.js";
+import { command as ticketRevokeCmd } from "./commands/ticketRevoke.js";
 
 dotenv.config();
 
@@ -74,6 +77,9 @@ const commandList = [
   mileGrantCmd,
   mileRevokeCmd,
   mileBalanceCmd,
+  settingsPanelCmd,
+  ticketGrantCmd,
+  ticketRevokeCmd,
 ];
 
 commandList.forEach((cmd) => {

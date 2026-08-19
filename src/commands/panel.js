@@ -6,17 +6,27 @@ import {
   PermissionFlagsBits,
 } from "discord.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
+import { checkPermission } from "../utils/permissionHelper.js";
 
 export const command = {
   ephemeral: true,
   data: new SlashCommandBuilder()
     .setName("パネル設置")
-    .setDescription("このチャンネルに全機能がボタン操作できる【総合操作パネル】を設置します🎮")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+    .setDescription("このチャンネルに全機能がボタン操作できる【総合操作パネル】を設置します🎮"),
 
   async execute(interaction) {
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    }
+
+    const guildId = interaction.guild.id;
+    const hasAdmin = await checkPermission(interaction.member, guildId, "admin");
+    if (!hasAdmin && !interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+      await interaction.followUp({
+        content: "⚠️ このコマンドを実行する権限がありません（管理者・モデレーター専用）。",
+        ephemeral: true,
+      });
+      return;
     }
 
     const embed = createBaseEmbed(

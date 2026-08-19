@@ -20,6 +20,9 @@ import { command as cardCmd } from "../commands/card.js";
 import { command as mileGrantCmd } from "../commands/mileGrant.js";
 import { command as mileRevokeCmd } from "../commands/mileRevoke.js";
 import { command as mileBalanceCmd } from "../commands/mileBalance.js";
+import { command as settingsPanelCmd } from "../commands/settingsPanel.js";
+import { command as ticketGrantCmd } from "../commands/ticketGrant.js";
+import { command as ticketRevokeCmd } from "../commands/ticketRevoke.js";
 
 dotenv.config();
 
@@ -44,6 +47,9 @@ const commands = [
   mileGrantCmd.data.toJSON(),
   mileRevokeCmd.data.toJSON(),
   mileBalanceCmd.data.toJSON(),
+  settingsPanelCmd.data.toJSON(),
+  ticketGrantCmd.data.toJSON(),
+  ticketRevokeCmd.data.toJSON(),
 ];
 
 const token = process.env.DISCORD_BOT_TOKEN;
@@ -59,7 +65,12 @@ const rest = new REST({ version: "10" }).setToken(token);
 export async function deployCommands() {
   try {
     console.log(`🚀 ${commands.length} 個のスラッシュコマンドをデプロイ中...`);
-    await rest.put(Routes.applicationCommands(clientId), { body: commands });
+    // 既存の Primary Entry Point (type: 4) コマンド等を自動検知して保持
+    const existing = await rest.get(Routes.applicationCommands(clientId)).catch(() => []);
+    const entryPoints = Array.isArray(existing) ? existing.filter((c) => c.type === 4) : [];
+
+    const finalCommands = [...commands, ...entryPoints];
+    await rest.put(Routes.applicationCommands(clientId), { body: finalCommands });
     console.log("✅ スラッシュコマンドのデプロイが完了しました！");
   } catch (error) {
     console.error("❌ スラッシュコマンドデプロイエラー:", error);
@@ -67,6 +78,6 @@ export async function deployCommands() {
 }
 
 // 直接実行された場合
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"))) {
   deployCommands();
 }

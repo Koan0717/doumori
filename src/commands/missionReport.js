@@ -15,6 +15,7 @@ import {
 } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
+import { checkPermission } from "../utils/permissionHelper.js";
 
 export const command = {
   ephemeral: false,
@@ -115,9 +116,10 @@ export const command = {
     });
 
     collector.on("collect", async (i) => {
-      // 管理者/モデレーター権限のチェック
-      if (!i.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-        await i.reply({ content: "⚠️ 報告を承認する権限がありません（スタッフ・管理者専用）。", ephemeral: true });
+      // スタッフ/管理者権限のチェック (mission_staff_role_ids or admin)
+      const hasStaff = await checkPermission(i.member, guildId, "mission_staff");
+      if (!hasStaff && !i.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+        await i.reply({ content: "⚠️ 報告を承認する権限がありません（ミッション承認スタッフ・管理者専用）。", ephemeral: true });
         return;
       }
 

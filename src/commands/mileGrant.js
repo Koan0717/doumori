@@ -1,14 +1,14 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
+import { SlashCommandBuilder } from "discord.js";
 import { adminAddMiles, getResidentCardData } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
+import { checkPermission } from "../utils/permissionHelper.js";
 
 export const command = {
   ephemeral: false,
   data: new SlashCommandBuilder()
     .setName("マイル付与")
-    .setDescription("【管理者専用】指定した住民にマイルポイントを手動で付与します🎁")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDescription("【スタッフ専用】指定した住民にマイルポイントを手動で付与します🎁")
     .addUserOption((option) =>
       option
         .setName("user")
@@ -34,17 +34,17 @@ export const command = {
       await interaction.deferReply({ ephemeral: false }).catch(() => {});
     }
 
-    // 管理者権限チェック
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator) &&
-        !interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    const guildId = interaction.guild.id;
+
+    // 権限チェック (管理者または mile_grant ロール)
+    const hasPerm = await checkPermission(interaction.member, guildId, "mile_grant");
+    if (!hasPerm) {
       await interaction.followUp({
-        content: "⚠️ このコマンドを実行する権限がありません（管理者専用）。",
+        content: "⚠️ このコマンドを実行する権限がありません（マイル付与スタッフ専用）。",
         ephemeral: true,
       });
       return;
     }
-
-    const guildId = interaction.guild.id;
     const targetUser = interaction.options.getUser("user");
     const amount = interaction.options.getInteger("amount");
     const reason = interaction.options.getString("reason") || "管理者による手動付与";
