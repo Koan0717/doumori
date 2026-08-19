@@ -30,14 +30,10 @@ export const command = {
     .addIntegerOption((option) =>
       option
         .setName("slot")
-        .setDescription("報告するミッション枠を選択してください（省略時はすべての未達成枠）")
+        .setDescription("報告するミッション枠番号 (1〜30、省略時はすべての未達成枠)")
         .setRequired(false)
-        .addChoices(
-          { name: "1️⃣ ミッション ①", value: 1 },
-          { name: "2️⃣ ミッション ②", value: 2 },
-          { name: "3️⃣ ミッション ③", value: 3 },
-          { name: "✨ すべての未達成ミッション", value: 0 }
-        )
+        .setMinValue(0)
+        .setMaxValue(30)
     ),
 
   async execute(interaction) {

@@ -509,7 +509,7 @@ export async function getDailyMissionSlotCount(guildId) {
         parsed = raw;
       }
       const val = parseInt(parsed, 10);
-      if (!isNaN(val) && val >= 1 && val <= 10) return val;
+      if (!isNaN(val) && val >= 1 && val <= 30) return val;
     }
   } catch (e) {}
   return CONFIG.DAILY_MISSION_SLOT_COUNT || 3;
