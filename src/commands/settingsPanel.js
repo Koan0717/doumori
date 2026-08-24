@@ -29,12 +29,20 @@ function buildMainMenuEmbed(settings) {
   const mileRoles = formatRolesText(settings.mile_grant_role_ids);
   const ticketRoles = formatRolesText(settings.ticket_grant_role_ids);
   const staffRoles = formatRolesText(settings.mission_staff_role_ids);
-  const ticketChannel = formatChannelText(settings.ticket_notify_channel_id);
   const missionChannel = formatChannelText(settings.mission_report_channel_id);
+
+  const notifyEnabled = settings.ticket_notify_enabled !== false;
+  const notifyStatus = notifyEnabled ? "🔔 有効 (ON)" : "🔕 無効 (OFF)";
+  const destMap = {
+    dm: "📩 メンバーのDM",
+    channel: `📢 指定 (${formatChannelText(settings.ticket_notify_channel_id)})`,
+    last_channel: "💬 最後に発言したチャンネル",
+  };
+  const destText = destMap[settings.ticket_notify_destination || "last_channel"] || "💬 最後に発言したチャンネル";
 
   const embed = createBaseEmbed(
     "⚙️ どうぶつの森林 - サーバー設定パネル",
-    "Botの各種ロール権限（付与・承認スタッフ・管理者）や通知先チャンネルを設定できます。\n下のメニューから設定したい項目を選択してください。\n*(※デイリーミッション枠数等はダッシュボードから設定可能です)*",
+    "Botの各種ロール権限（付与・承認スタッフ・管理者）や浮上通知先を設定できます。\n下のメニューから設定したい項目を選択してください。\n*(※デイリーミッション枠数等はダッシュボードから設定可能です)*",
     "#2ECC71"
   );
 
@@ -60,8 +68,8 @@ function buildMainMenuEmbed(settings) {
       inline: false,
     },
     {
-      name: "🎫 チケット獲得通知チャンネル",
-      value: ticketChannel,
+      name: "🎫 浮上特典通知設定",
+      value: `状態: **${notifyStatus}**\n送信先: **${destText}**`,
       inline: true,
     },
     {
@@ -113,6 +121,91 @@ function buildMainMenuComponents() {
     );
 
   return [new ActionRowBuilder().addComponents(selectMenu)];
+}
+
+function buildNotifySettingsView(settings) {
+  const notifyEnabled = settings.ticket_notify_enabled !== false;
+  const notifyStatus = notifyEnabled ? "🔔 有効 (通知する)" : "🔕 無効 (通知しない/サイレント)";
+  const destMap = {
+    dm: "📩 メンバーのDM",
+    channel: `📢 指定チャンネル (${formatChannelText(settings.ticket_notify_channel_id)})`,
+    last_channel: "💬 最後にメッセージを送信したチャンネル",
+  };
+  const currentDest = settings.ticket_notify_destination || "last_channel";
+  const destText = destMap[currentDest] || "💬 最後にメッセージを送信したチャンネル";
+  const missionChannel = formatChannelText(settings.mission_report_channel_id);
+
+  const embed = createBaseEmbed(
+    "📢 浮上通知＆報告チャンネル設定",
+    "**浮上特典（図鑑チケット）の獲得通知やミッション報告チャンネルを設定します。**\n\n" +
+      `・**通知の送信状態**: **${notifyStatus}**\n` +
+      `・**通知メッセージの送信先**: **${destText}**\n` +
+      `・**ミッション報告受付チャンネル**: ${missionChannel}\n\n` +
+      "※ 下のボタンやメニューから送信ON/OFF・送信先モード・チャンネルを変更してください。",
+    "#34495E"
+  );
+
+  // 1. ON/OFF切り替えボタン ＆ メイン設定に戻るボタン
+  const toggleBtn = new ButtonBuilder()
+    .setCustomId("btn_toggle_ticket_notify")
+    .setLabel(notifyEnabled ? "🔕 通知をOFFにする" : "🔔 通知をONにする")
+    .setStyle(notifyEnabled ? ButtonStyle.Danger : ButtonStyle.Success);
+
+  const backBtn = new ButtonBuilder()
+    .setCustomId("btn_back_main")
+    .setLabel("🔙 メイン設定に戻る")
+    .setStyle(ButtonStyle.Secondary);
+
+  const buttonRow = new ActionRowBuilder().addComponents(toggleBtn, backBtn);
+
+  // 2. 送信先モード選択メニュー (DM / 指定チャンネル / 直近発言チャンネル)
+  const destSelect = new StringSelectMenuBuilder()
+    .setCustomId("menu_select_ticket_dest")
+    .setPlaceholder(`送信先: ${destMap[currentDest] || "選択してください"}`)
+    .addOptions(
+      {
+        label: "📩 メンバーのDM",
+        description: "達成したユーザーの個人DMへ直接送信",
+        value: "dest_dm",
+        default: currentDest === "dm",
+        emoji: "📩",
+      },
+      {
+        label: "📢 特定のチャンネル",
+        description: "下のチャンネル選択で指定したチャンネルへ固定送信",
+        value: "dest_channel",
+        default: currentDest === "channel",
+        emoji: "📢",
+      },
+      {
+        label: "💬 最後にメッセージを送信したチャンネル",
+        description: "ユーザーが直近で発言したアクティブチャンネル上へ返信",
+        value: "dest_last_channel",
+        default: currentDest === "last_channel",
+        emoji: "💬",
+      }
+    );
+
+  const destRow = new ActionRowBuilder().addComponents(destSelect);
+
+  // 3. チャンネル選択メニュー (チケット通知先 & ミッション報告先)
+  const ticketChannelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId("channel_select_ticket_notify")
+    .setPlaceholder("🎫 チケット獲得通知チャンネルを選択 (指定モード用)")
+    .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+  const missionChannelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId("channel_select_mission_report")
+    .setPlaceholder("📸 ミッション報告受付チャンネルを選択")
+    .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+  const channelRow1 = new ActionRowBuilder().addComponents(ticketChannelSelect);
+  const channelRow2 = new ActionRowBuilder().addComponents(missionChannelSelect);
+
+  return {
+    embed,
+    components: [buttonRow, destRow, channelRow1, channelRow2],
+  };
 }
 
 export const command = {
@@ -288,45 +381,31 @@ export const command = {
         }
         // 5. 通知・報告チャンネル設定
         else if (category === "opt_notify_channels") {
-          const ticketChannel = formatChannelText(settings.ticket_notify_channel_id);
-          const missionChannel = formatChannelText(settings.mission_report_channel_id);
-
-          const embed = createBaseEmbed(
-            "📢 通知・報告チャンネル設定",
-            "**チケット獲得通知やミッション報告を受信するチャンネルを設定します。**\n\n" +
-            `・**チケット獲得通知先**: ${ticketChannel}\n` +
-            `・**ミッション報告受付先**: ${missionChannel}\n\n` +
-            "※ 下のチャンネル選択メニューから各通知先チャンネルを設定してください。",
-            "#34495E"
-          );
-
-          const ticketChannelSelect = new ChannelSelectMenuBuilder()
-            .setCustomId("channel_select_ticket_notify")
-            .setPlaceholder("🎫 チケット獲得通知チャンネルを選択")
-            .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
-
-          const missionChannelSelect = new ChannelSelectMenuBuilder()
-            .setCustomId("channel_select_mission_report")
-            .setPlaceholder("📸 ミッション報告受付チャンネルを選択")
-            .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
-
-          const backBtn = new ButtonBuilder()
-            .setCustomId("btn_back_main")
-            .setLabel("🔙 メイン設定に戻る")
-            .setStyle(ButtonStyle.Secondary);
-
+          const view = buildNotifySettingsView(settings);
           await i.editReply({
-            embeds: [embed],
-            components: [
-              new ActionRowBuilder().addComponents(ticketChannelSelect),
-              new ActionRowBuilder().addComponents(missionChannelSelect),
-              new ActionRowBuilder().addComponents(backBtn),
-            ],
+            embeds: [view.embed],
+            components: view.components,
           });
         }
       }
 
-      // B. ロール選択の保存
+      // B. 送信先モードの選択保存
+      else if (i.isStringSelectMenu() && i.customId === "menu_select_ticket_dest") {
+        const dest = i.values[0].replace("dest_", "");
+        settings.ticket_notify_destination = dest;
+        await saveDoumoriSettings(guildId, { ticket_notify_destination: dest });
+
+        settings = await getDoumoriSettings(guildId);
+        const view = buildNotifySettingsView(settings);
+
+        await i.editReply({
+          content: "✅ **通知の送信先モードを更新しました！**",
+          embeds: [view.embed],
+          components: view.components,
+        });
+      }
+
+      // C. ロール選択の保存
       else if (i.isRoleSelectMenu()) {
         const selectedRoleIds = i.values;
 
@@ -355,7 +434,7 @@ export const command = {
         });
       }
 
-      // C. チャンネル選択の保存
+      // D. チャンネル選択の保存
       else if (i.isChannelSelectMenu()) {
         const channelId = i.values[0];
 
@@ -368,17 +447,33 @@ export const command = {
         }
 
         settings = await getDoumoriSettings(guildId);
-        const updatedEmbed = buildMainMenuEmbed(settings);
-        const updatedRows = buildMainMenuComponents();
+        const view = buildNotifySettingsView(settings);
 
         await i.editReply({
           content: "✅ **通知チャンネル設定を保存しました！**",
-          embeds: [updatedEmbed],
-          components: updatedRows,
+          embeds: [view.embed],
+          components: view.components,
         });
       }
 
-      // D. メインメニューに戻るボタン
+      // E. 通知ON/OFFトグルボタン
+      else if (i.isButton() && i.customId === "btn_toggle_ticket_notify") {
+        const current = settings.ticket_notify_enabled !== false;
+        const newStatus = !current;
+        settings.ticket_notify_enabled = newStatus;
+        await saveDoumoriSettings(guildId, { ticket_notify_enabled: newStatus });
+
+        settings = await getDoumoriSettings(guildId);
+        const view = buildNotifySettingsView(settings);
+
+        await i.editReply({
+          content: `✅ **浮上特典通知を ${newStatus ? "【有効 (ON)】" : "【無効 (OFF)】"} に変更しました！**`,
+          embeds: [view.embed],
+          components: view.components,
+        });
+      }
+
+      // F. メインメニューに戻るボタン
       else if (i.isButton() && i.customId === "btn_back_main") {
         settings = await getDoumoriSettings(guildId);
         const mainEmbed = buildMainMenuEmbed(settings);

@@ -54,6 +54,8 @@ const commands = [
 
 const token = process.env.DISCORD_BOT_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
+// どう森専用ギルドID（このサーバーにのみコマンドを登録する）
+const guildId = process.env.DOUMORI_GUILD_ID || "1526696870724894780";
 
 if (!token || !clientId) {
   console.error("❌ DISCORD_BOT_TOKEN または DISCORD_CLIENT_ID が設定されていません。");
@@ -64,14 +66,20 @@ const rest = new REST({ version: "10" }).setToken(token);
 
 export async function deployCommands() {
   try {
-    console.log(`🚀 ${commands.length} 個のスラッシュコマンドをデプロイ中...`);
-    // 既存の Primary Entry Point (type: 4) コマンド等を自動検知して保持
-    const existing = await rest.get(Routes.applicationCommands(clientId)).catch(() => []);
-    const entryPoints = Array.isArray(existing) ? existing.filter((c) => c.type === 4) : [];
+    console.log(`🚀 ${commands.length} 個のスラッシュコマンドをどう森ギルドにデプロイ中...`);
 
-    const finalCommands = [...commands, ...entryPoints];
-    await rest.put(Routes.applicationCommands(clientId), { body: finalCommands });
-    console.log("✅ スラッシュコマンドのデプロイが完了しました！");
+    // ① グローバルコマンドからどう森コマンドを削除（他サーバーに表示されないようにする）
+    const globalExisting = await rest.get(Routes.applicationCommands(clientId)).catch(() => []);
+    const doumorNames = commands.map((c) => c.name);
+    const nonDoumorGlobal = Array.isArray(globalExisting)
+      ? globalExisting.filter((c) => !doumorNames.includes(c.name))
+      : [];
+    await rest.put(Routes.applicationCommands(clientId), { body: nonDoumorGlobal });
+    console.log("✅ グローバルからどう森コマンドを削除しました。");
+
+    // ② どう森ギルドにのみコマンドを登録する
+    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
+    console.log(`✅ どう森ギルド(${guildId})へのコマンド登録が完了しました！`);
   } catch (error) {
     console.error("❌ スラッシュコマンドデプロイエラー:", error);
   }
