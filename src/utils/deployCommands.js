@@ -52,19 +52,18 @@ const commands = [
   ticketRevokeCmd.data.toJSON(),
 ];
 
-const token = process.env.DISCORD_BOT_TOKEN;
-const clientId = process.env.DISCORD_CLIENT_ID;
-// どう森専用ギルドID（このサーバーにのみコマンドを登録する）
-const guildId = process.env.DOUMORI_GUILD_ID || "1526696870724894780";
-
-if (!token || !clientId) {
-  console.error("❌ DISCORD_BOT_TOKEN または DISCORD_CLIENT_ID が設定されていません。");
-  process.exit(1);
-}
-
-const rest = new REST({ version: "10" }).setToken(token);
-
 export async function deployCommands() {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.DOUMORI_GUILD_ID || "1526696870724894780";
+
+  if (!token || !clientId) {
+    console.error("❌ DISCORD_BOT_TOKEN または DISCORD_CLIENT_ID が設定されていません。");
+    return;
+  }
+
+  const rest = new REST({ version: "10" }).setToken(token);
+
   try {
     console.log(`🚀 ${commands.length} 個のスラッシュコマンドをどう森ギルドにデプロイ中...`);
 

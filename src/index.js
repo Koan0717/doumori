@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection } from "discord.js";
+import { Client, GatewayIntentBits, Collection, Events } from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
@@ -106,7 +106,7 @@ const buttonCommandMap = {
 };
 
 // 3. イベントハンドラー
-client.on("clientReady", async () => {
+client.on(Events.ClientReady, async () => {
   console.log(`🟢 Botがログインしました: ${client.user.tag}`);
   
   // スラッシュコマンド自動登録
@@ -174,6 +174,15 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
 // チャット監視 (チケット付与)
 client.on("messageCreate", async (message) => {
   await handleMessageCreate(message).catch((err) => console.error("❌ Chat tracker error:", err));
+});
+
+// プロセスエラーハンドリング (Botのクラッシュ・オフライン化防止)
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ 未処理のPromise拒否 (unhandledRejection):", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ 未処理の例外 (uncaughtException):", error);
 });
 
 // 4. メイン起動

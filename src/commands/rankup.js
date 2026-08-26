@@ -86,9 +86,31 @@ export const command = {
           await member.roles.add(role);
           roleGrantedText = `\n🏅 限定階級ロール **「${role.name}」** を付与しました！`;
         }
+
+        // 旧階級ロールの自動削除 (下位ロールが残ることによる誤判定防止)
+        const oldRolesToRemove = member.roles.cache.filter((r) => {
+          if (r.id === role.id) return false;
+          // Level 2以上への昇格時: 新規住人/新規住民ロールを削除
+          if (nextRank.level >= 2 && (r.name.includes("新規住人") || r.name.includes("新規住民"))) {
+            return true;
+          }
+          // Level 3以上への昇格時: 住人/住民（階級専用ロール）を削除
+          if (nextRank.level >= 3 && (r.name === "住人" || r.name === "住民" || r.name === "🏠 住人" || r.name === "🏠 住民" || r.name === "住人ロール" || r.name === "住民ロール")) {
+            return true;
+          }
+          // Level 4への昇格時: 常連住人/常連住民ロールを削除
+          if (nextRank.level >= 4 && (r.name.includes("常連住人") || r.name.includes("常連住民"))) {
+            return true;
+          }
+          return false;
+        });
+
+        for (const [rId, oldRole] of oldRolesToRemove) {
+          await member.roles.remove(oldRole).catch(() => {});
+        }
       }
     } catch (err) {
-      console.error("❌ ランクアップロール付与エラー:", err);
+      console.error("❌ ランクアップロール付与・整理エラー:", err);
     }
 
     const cardData = await getResidentCardData(guildId, userId, interaction.member);

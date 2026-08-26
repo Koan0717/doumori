@@ -117,22 +117,37 @@ export function resolveRankFromMember(member, defaultRankLevel = 1) {
       return { level: 3, name: "☕ 常連住人", roleName: regularRole, color: "#E67E22" };
     }
 
-    // 3. 住人ロール判定 (Level 2: 「新規」「常連」「人気」を含まない単体の住人/住人ロール)
-    const citizenRole = roleNames.find(
-      (name) =>
-        (name.includes("住人") || name.includes("住民")) &&
-        !name.includes("新規") &&
-        !name.includes("常連") &&
-        !name.includes("人気")
-    );
-    if (citizenRole) {
-      return { level: 2, name: "🏠 住人", roleName: citizenRole, color: "#3498DB" };
-    }
-
-    // 4. 新規住人ロール判定 (Level 1)
+    // 3. 新規住人ロール判定 (Level 1)
+    // ※サーバーのデフォルト役職として「住民」が付与されている場合でも、「新規住人/新規住民」を持っていれば Level 1 (新規住人) として判定
     const rookieRole = roleNames.find((name) => name.includes("新規住人") || name.includes("新規住民"));
     if (rookieRole) {
       return { level: 1, name: "🌱 新規住人", roleName: rookieRole, color: "#A8E6CF" };
+    }
+
+    // 4. 住人ロール判定 (Level 2: 「新規」「常連」「人気」を含まない、階級ロールとしての住人/住民)
+    const citizenRole = roleNames.find((name) => {
+      const clean = name.trim();
+      if (clean.includes("新規") || clean.includes("常連") || clean.includes("人気")) {
+        return false;
+      }
+      if (!clean.includes("住人") && !clean.includes("住民")) {
+        return false;
+      }
+      // 絵文字や記号を除去した名前で判定
+      const stripped = clean.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+      return (
+        stripped === "住人" ||
+        stripped === "住民" ||
+        stripped === "住人ロール" ||
+        stripped === "住民ロール" ||
+        clean === "🏠 住人" ||
+        clean === "🏠 住民" ||
+        clean === "住人" ||
+        clean === "住民"
+      );
+    });
+    if (citizenRole) {
+      return { level: 2, name: "🏠 住人", roleName: citizenRole, color: "#3498DB" };
     }
   }
 
