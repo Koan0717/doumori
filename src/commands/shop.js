@@ -13,6 +13,7 @@ import {
   addInventoryItem,
   getItemCount,
   buyTicketsWithMiles,
+  getDoumoriSettings,
 } from "../database/db.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
@@ -30,11 +31,15 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
+    const settings = await getDoumoriSettings(guildId);
+    const mileRate = (settings.miles_per_ticket && !isNaN(parseInt(settings.miles_per_ticket, 10)))
+      ? parseInt(settings.miles_per_ticket, 10)
+      : (CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100);
+
     const userData = await getUser(guildId, userId);
     const userMiles = await getUserMiles(guildId, userId);
     const rodCount = await getItemCount(guildId, userId, "fishing_rod");
     const netCount = await getItemCount(guildId, userId, "bug_net");
-    const mileRate = CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100;
 
     const buildShopEmbed = (uData, mMiles, rCount, nCount, notice = "") => {
       const embed = createBaseEmbed(

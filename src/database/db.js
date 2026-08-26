@@ -873,7 +873,14 @@ export async function adminRemoveMiles(guildId, userId, amount, adminId, reason 
  * マイルを消費してチケットを購入
  */
 export async function buyTicketsWithMiles(guildId, userId, ticketCount = 1) {
-  const rate = CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100;
+  let rate = CONFIG.EXCHANGE_RATES.MILES_PER_TICKET || 100;
+  try {
+    const settings = await getDoumoriSettings(guildId);
+    if (settings.miles_per_ticket && !isNaN(parseInt(settings.miles_per_ticket, 10))) {
+      rate = parseInt(settings.miles_per_ticket, 10);
+    }
+  } catch (e) {}
+
   const count = Math.max(1, parseInt(ticketCount, 10) || 1);
   const requiredMiles = count * rate;
 

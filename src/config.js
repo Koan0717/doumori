@@ -5,10 +5,9 @@ export const CONFIG = {
   // VC・チャットによるチケット獲得ルール
   TICKET_REQUIRED_SECONDS: 3600, // 1時間 = 3600秒
 
-  // exchange (通貨交換) のデフォルトレート
+  // exchange (両替・チケット購入) のレート
   EXCHANGE_RATES: {
-    MANYBOT_PER_TICKET: 500, // 500ベル = チケット1枚
-    MILES_PER_TICKET: 100,   // 100マイル = チケット1枚 (マイル購入)
+    MILES_PER_TICKET: 100, // 100マイル = チケット1枚
   },
 
   // 通貨名
