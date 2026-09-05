@@ -4,7 +4,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits,
-  ComponentType,
+  EmbedBuilder,
 } from "discord.js";
 import {
   getUserMiles,
@@ -103,66 +103,128 @@ export const command = {
         .setStyle(ButtonStyle.Success)
     );
 
-    const reportMsg = await interaction.followUp({
+    await interaction.followUp({
       content: "📢 **新しいミッション達成報告が届きました！** (運営・管理者はボタンを押して承認できます)",
       embeds: [embed],
       components: [row],
     });
+  },
+};
 
-    // 承認ボタンコレクター (24時間受付)
-    const collector = reportMsg.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 86400000,
-    });
+/**
+ * デイリーミッション承認ボタンのグローバルハンドラー
+ * @param {import("discord.js").ButtonInteraction} interaction
+ */
+export async function handleMissionApproval(interaction) {
+  // 1. 即時 deferUpdate でDiscordの3秒タイムアウトを防止
+  await interaction.deferUpdate().catch(() => {});
 
-    collector.on("collect", async (i) => {
-      // スタッフ/管理者権限のチェック (mission_staff_role_ids or admin)
-      const hasStaff = await checkPermission(i.member, guildId, "mission_staff");
-      if (!hasStaff && !i.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-        await i.reply({ content: "⚠️ 報告を承認する権限がありません（ミッション承認スタッフ・管理者専用）。", ephemeral: true });
-        return;
-      }
+  const guildId = interaction.guildId;
+  const staffMember = interaction.member;
+  const staffUser = interaction.user;
 
-      await i.deferUpdate();
+  try {
+    // 2. スタッフ/管理者権限のチェック (mission_staff_role_ids or admin or ManageMessages)
+    const hasStaff = await checkPermission(
+      staffMember,
+      guildId,
+      "mission_staff",
+      interaction.memberPermissions
+    );
+    if (!hasStaff) {
+      await interaction.followUp({
+        content: "⚠️ 報告を承認する権限がありません（ミッション承認スタッフ・管理者専用）。",
+        ephemeral: true,
+      });
+      return;
+    }
 
-      const reportMember = interaction.guild
-        ? await interaction.guild.members.fetch(userId).catch(() => interaction.member)
-        : interaction.member;
+    // 3. customId の解析: approve_${userId}_${dateKey}_${slot} (旧形式: approve_${userId}_${dateKey})
+    const parts = interaction.customId.split("_");
+    const targetUserId = parts[1];
+    const dateKey = parts[2];
+    const slot = parts[3] !== undefined ? parseInt(parts[3], 10) : 0;
 
-      const result = await approveMissionSlot(guildId, userId, dateKey, slot, i.user.id, reportMember);
-      if (!result) {
-        await i.followUp({ content: "すでに承認済みです。", ephemeral: true });
-        return;
-      }
+    if (!targetUserId || !dateKey) {
+      await interaction.followUp({
+        content: "⚠️ 無効な承認リクエストです。",
+        ephemeral: true,
+      });
+      return;
+    }
 
-      // 最新の住民カード情報を取得 (ロール反映)
-      const cardData = await getResidentCardData(guildId, userId, reportMember);
-      const cardEmbed = buildResidentCardEmbed(cardData, interaction.user);
+    // 4. 対象メンバー・ユーザーの取得
+    const targetMember = interaction.guild
+      ? await interaction.guild.members.fetch(targetUserId).catch(() => null)
+      : null;
+    const targetUser = targetMember?.user || await interaction.client.users.fetch(targetUserId).catch(() => null);
+    const targetMention = targetUser ? targetUser.toString() : `<@${targetUserId}>`;
 
-      const approvedEmbed = createBaseEmbed(
-        "🎉 ミッション承認完了＆自動反映！",
-        `**承認スタッフ**: ${i.user.toString()}\n` +
-        `**対象者**: ${interaction.user.toString()}\n\n` +
-        `💰 **獲得ポイント**: **+${result.rewardMiles}** pt\n` +
-        `📈 **承認ミッション枠数**: **${result.approvedCount}** 枠\n` +
-        `📝 **処理履歴**: 記録完了\n` +
-        `🃏 **住民カード**: 最新情報に自動更新されました！`,
-        "#2ECC71"
-      );
-
+    // 5. 承認処理の実行
+    const result = await approveMissionSlot(guildId, targetUserId, dateKey, slot, staffUser.id, targetMember);
+    if (!result) {
+      // 既に承認済みの場合、ボタンを無効化して通知
       const disabledRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId("approved")
-          .setLabel(`✅ 承認完了 (by ${i.user.displayName})`)
+          .setCustomId("approved_already")
+          .setLabel("✅ 承認済み")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
       );
+      await interaction.editReply({ components: [disabledRow] }).catch(() => {});
+      await interaction.followUp({ content: "⚠️ このミッション報告はすでに承認済みです。", ephemeral: true });
+      return;
+    }
 
-      await i.editReply({
-        content: `✅ ${interaction.user.toString()} さんのミッション報告が承認されました！`,
-        embeds: [approvedEmbed, cardEmbed],
-        components: [disabledRow],
-      });
+    // 6. 最新の住民カード情報を取得
+    const cardData = await getResidentCardData(guildId, targetUserId, targetMember);
+    const cardEmbed = targetUser ? buildResidentCardEmbed(cardData, targetUser) : null;
+
+    const approvedEmbed = createBaseEmbed(
+      "🎉 ミッション承認完了＆自動反映！",
+      `**承認スタッフ**: ${staffUser.toString()}\n` +
+      `**対象者**: ${targetMention}\n\n` +
+      `💰 **獲得ポイント**: **+${result.rewardMiles}** pt\n` +
+      `📈 **承認ミッション枠数**: **${result.approvedCount}** 枠\n` +
+      `📝 **処理履歴**: 記録完了\n` +
+      `🃏 **住民カード**: 最新情報に自動更新されました！`,
+      "#2ECC71"
+    );
+
+    const disabledRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("approved")
+        .setLabel(`✅ 承認完了 (by ${staffUser.displayName || staffUser.username})`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true)
+    );
+
+    const embedsToSend = [];
+    if (interaction.message.embeds && interaction.message.embeds.length > 0) {
+      try {
+        const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+          .setColor("#2ECC71")
+          .setFooter({ text: `提出日: ${dateKey} | ✅ 承認完了 (by ${staffUser.displayName || staffUser.username})` });
+        embedsToSend.push(originalEmbed);
+      } catch {
+        // フォールバック
+      }
+    }
+    embedsToSend.push(approvedEmbed);
+    if (cardEmbed) {
+      embedsToSend.push(cardEmbed);
+    }
+
+    await interaction.editReply({
+      content: `✅ ${targetMention} さんのミッション報告が承認されました！`,
+      embeds: embedsToSend,
+      components: [disabledRow],
     });
-  },
-};
+  } catch (error) {
+    console.error("❌ ミッション承認処理エラー:", error);
+    await interaction.followUp({
+      content: `❌ 承認処理中にエラーが発生しました: \`${error.message || error}\``,
+      ephemeral: true,
+    }).catch(() => {});
+  }
+}

@@ -19,7 +19,7 @@ import { command as helpCmd } from "./commands/help.js";
 import { command as panelCmd } from "./commands/panel.js";
 import { command as milesCmd } from "./commands/miles.js";
 import { command as missionCmd } from "./commands/mission.js";
-import { command as missionReportCmd } from "./commands/missionReport.js";
+import { command as missionReportCmd, handleMissionApproval } from "./commands/missionReport.js";
 import { command as diyCmd } from "./commands/diy.js";
 import { command as rankupCmd } from "./commands/rankup.js";
 import { command as cardCmd } from "./commands/card.js";
@@ -163,6 +163,14 @@ client.on("interactionCreate", async (interaction) => {
         await interaction.reply(replyPayload).catch(() => {});
       }
     }
+  }
+  // C. ミッション承認ボタンクリックの実行 (approve_${userId}_${dateKey}_${slot})
+  else if (interaction.isButton() && interaction.customId.startsWith("approve_")) {
+    await handleMissionApproval(interaction);
+  }
+  // D. 既に承認済みのボタンが押された場合のフォールバック案内
+  else if (interaction.isButton() && (interaction.customId === "approved" || interaction.customId.startsWith("approved_"))) {
+    await interaction.reply({ content: "ℹ️ このミッション報告はすでに承認済みです。", ephemeral: true }).catch(() => {});
   }
 });
 
