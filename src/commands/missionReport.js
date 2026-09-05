@@ -199,18 +199,7 @@ export async function handleMissionApproval(interaction) {
         .setDisabled(true)
     );
 
-    const embedsToSend = [];
-    if (interaction.message.embeds && interaction.message.embeds.length > 0) {
-      try {
-        const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-          .setColor("#2ECC71")
-          .setFooter({ text: `提出日: ${dateKey} | ✅ 承認完了 (by ${staffUser.displayName || staffUser.username})` });
-        embedsToSend.push(originalEmbed);
-      } catch {
-        // フォールバック
-      }
-    }
-    embedsToSend.push(approvedEmbed);
+    const embedsToSend = [approvedEmbed];
     if (cardEmbed) {
       embedsToSend.push(cardEmbed);
     }
