@@ -50,3 +50,57 @@ Render の管理画面で、以下の **Environment Variables** を登録して�
 | **`DOUMORI_DATABASE_URL`** | `doumori` Bot専用の Supabase 接続文字列 |
 | **`MANYBOT_DATABASE_URL`** | `manybot` Bot専用の Supabase 接続文字列 (通貨連携用) |
 | **`PORT`** | `8080` （RenderのダミーWebヘルスチェック用） |
+
+---
+
+## 🖥️ 管理ダッシュボード (`dashboard/`)
+
+`dashboard/` フォルダはNext.js製の、どう森BOT専用の管理ダッシュボードです。以前 `manybot` のダッシュボードに間借りしていた設定画面（浮上特典・ミッション管理・階級設定・マイル手動操作・総合パネル送信）を、この専用サイトに統合しました。
+
+Bot本体と同じ `doumori_settings` / `doumori_missions_master` / `doumori_ranks_master` などのテーブルを直接読み書きするため、設定はBotに即時反映されます。
+
+### セットアップ
+
+```bash
+cd dashboard
+npm install
+```
+
+`dashboard/.env.local` を作成し、以下を設定します（`dashboard/.env.example` 参照）。
+
+```env
+# Bot本体と同じDoumori専用DB
+DOUMORI_DATABASE_URL=postgresql://ユーザー名:パスワード@ホスト:ポート/DB名
+
+# Bot本体と同じトークン（チャンネル/ロール取得・パネル送信用）
+DISCORD_BOT_TOKEN=あなたのBotトークン
+
+# 管理対象サーバーのGuild ID（1サーバー専用ダッシュボードです）
+DASHBOARD_GUILD_ID=対象サーバーのGuild ID
+
+# ログイン情報
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=任意のパスワード
+JWT_SECRET=任意のランダムな秘密文字列
+```
+
+開発モードで起動:
+
+```bash
+npm run dev
+```
+
+本番ビルド:
+
+```bash
+npm run build
+npm start
+```
+
+### 主な画面
+
+- **基本設定**: 浮上特典通知・ショップ価格・採集確率・コンプリートロール・売却額・ミッション受注枠数など
+- **デイリーミッション管理**: ミッションの作成・編集・有効/無効切り替え・達成統計・承認ログ
+- **階級・ランク設定**: 4段階の階級名・昇格マイル数・自動付与ロール名
+- **マイル手動操作**: 管理者によるマイルの付与・没収とその履歴
+- **総合操作パネル送信**: `/パネル設置` と同等のボタン付きパネルを任意チャンネルへ送信
