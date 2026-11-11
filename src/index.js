@@ -32,17 +32,26 @@ import { command as ticketRevokeCmd } from "./commands/ticketRevoke.js";
 
 dotenv.config();
 
-// 1. Render用ダミーWebサーバー (24時間ヘルスチェックパス用)
-const app = express();
-const PORT = process.env.PORT || 8080;
+// 1. ヘルスチェック用Webサーバー (PORT が設定されている場合のみ起動)
+//    Render などのPaaSでは PORT が自動設定されるので起動する。
+//    VPS + pm2 運用では不要なので PORT を設定しなければ起動しない（他Botとのポート衝突を防ぐ）。
+const PORT = process.env.PORT;
 
-app.get("/", (req, res) => {
-  res.send("🍃 どうぶつの森林 Bot is running 24/7 on Render!");
-});
+if (PORT) {
+  const app = express();
 
-app.listen(PORT, () => {
-  console.log(`🌐 Renderヘルスチェック用サーバーがポート ${PORT} で起動しました。`);
-});
+  app.get("/", (req, res) => {
+    res.send("🍃 どうぶつの森林 Bot is running!");
+  });
+
+  app
+    .listen(PORT, () => {
+      console.log(`🌐 ヘルスチェック用サーバーがポート ${PORT} で起動しました。`);
+    })
+    .on("error", (err) => {
+      console.error(`⚠️ ヘルスチェック用サーバーを起動できませんでした (ポート ${PORT}):`, err.message);
+    });
+}
 
 // 2. Discord Client インスタンス化
 const client = new Client({
