@@ -219,8 +219,8 @@ process.on("uncaughtException", (error) => {
 // 4. メイン起動
 async function startBot() {
   // DB初期化
-  if (process.env.MANYBOT_DATABASE_URL || process.env.DATABASE_URL || process.env.DOUMORI_DATABASE_URL) {
-    await initDatabase(DOUMORI_GUILD_IDS).catch((err) => console.error("❌ DB Init error:", err));
+  if (process.env.DATABASE_URL || process.env.DOUMORI_DATABASE_URL) {
+    await initDatabase().catch((err) => console.error("❌ DB Init error:", err));
   }
 
   const token = process.env.DISCORD_BOT_TOKEN;

@@ -62,18 +62,10 @@ nano .env   # 下の環境変数を記入
 | :--- | :--- |
 | **`DISCORD_BOT_TOKEN`** | **ManyBot と同じ** Bot Token |
 | **`DISCORD_CLIENT_ID`** | **ManyBot と同じ** Application (Client) ID |
-| **`MANYBOT_DATABASE_URL`** | ManyBot の**マスターDB**（ManyBot の `DATABASE_URL` と同じ）。サーバーごとのDB登録（ManyBot ダッシュボードの「データベース設定」）をここから読みます |
-| `DOUMORI_DATABASE_URL` | (任意) 旧どう森DB。サーバー専用DBが登録されていないサーバーで使います |
+| **`DOUMORI_DATABASE_URL`** | `doumori` Bot専用の Supabase 接続文字列 |
+| **`MANYBOT_DATABASE_URL`** | `manybot` Bot専用の Supabase 接続文字列 (通貨連携用) |
 | `DOUMORI_GUILD_ID` | (任意) どう森の機能を動かすサーバーID。カンマ区切りで複数可。未設定ならどう森サーバー |
 | `PORT` | (任意) ヘルスチェック用Webサーバー。**VPSでは設定不要**（manybotとのポート衝突を避けるため） |
-
-#### データベースの選び方（サーバーごと）
-
-1. ManyBot ダッシュボードの「データベース設定」で**そのサーバー専用のDB**が登録されていれば、それを使います（どう森のテーブルは自動作成）。ManyBot の通貨（ベル連携）も同じDBを使います。
-2. 登録されていなければ、旧どう森DB（`DOUMORI_DATABASE_URL`）を使います。
-3. どちらも無いサーバーでは、どう森のコマンドはエラーになります。
-
-ダッシュボードで専用DBを登録・変更すると、Bot は1分以内に切り替わります。**切り替えても旧どう森DBのデータは自動では移りません。**
 
 #### ManyBot と同じトークンで動かす仕組み
 
