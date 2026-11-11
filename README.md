@@ -39,9 +39,22 @@
 
 ---
 
-## 🚀 Render での環境変数設定 (Environment Variables)
+## 🚀 ConoHa VPS + pm2 で動かす
 
-Render の管理画面で、以下の **Environment Variables** を登録してください。
+manybot と同じVPS上で、pm2 で並べて常駐させる手順です。
+
+### 1. 初回セットアップ
+
+```bash
+cd ~
+git clone https://github.com/Koan0717/doumori.git
+cd doumori
+npm ci --omit=dev
+cp .env.example .env
+nano .env   # 下の環境変数を記入
+```
+
+### 2. 環境変数 (`.env`)
 
 | キー (Key) | 値 (Value) の説明 |
 | :--- | :--- |
@@ -49,7 +62,37 @@ Render の管理画面で、以下の **Environment Variables** を登録して�
 | **`DISCORD_CLIENT_ID`** | Discord Application (Client) ID |
 | **`DOUMORI_DATABASE_URL`** | `doumori` Bot専用の Supabase 接続文字列 |
 | **`MANYBOT_DATABASE_URL`** | `manybot` Bot専用の Supabase 接続文字列 (通貨連携用) |
-| **`PORT`** | `8080` （RenderのダミーWebヘルスチェック用） |
+| `DOUMORI_GUILD_ID` | (任意) コマンドを登録するサーバーID。未設定ならどう森サーバー |
+| `PORT` | (任意) ヘルスチェック用Webサーバー。**VPSでは設定不要**（manybotとのポート衝突を避けるため） |
+
+### 3. pm2 で起動
+
+```bash
+pm2 start ecosystem.config.cjs
+pm2 save        # 現在のプロセス一覧(manybot + doumori)を保存
+pm2 logs doumori-bot
+```
+
+ログに `🟢 Botがログインしました` と出れば起動完了です。
+VPS再起動後も自動で立ち上がるようにするには、まだ設定していなければ `pm2 startup` を一度実行し、表示されたコマンドを実行してください（manybotで設定済みなら `pm2 save` だけでOK）。
+
+### 4. 更新するとき
+
+```bash
+cd ~/doumori
+git pull
+npm ci --omit=dev
+pm2 restart doumori-bot
+```
+
+### よく使うコマンド
+
+```bash
+pm2 ls                    # manybot と doumori-bot の状態一覧
+pm2 logs doumori-bot      # ログを見る
+pm2 restart doumori-bot   # 再起動
+pm2 stop doumori-bot      # 停止
+```
 
 ---
 
