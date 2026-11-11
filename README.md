@@ -56,23 +56,14 @@ nano .env   # 下の環境変数を記入
 
 ### 2. 環境変数 (`.env`)
 
-どう森BOTは **ManyBot と同じトークン（同じDiscordアプリ）** で動かします。別のBotを作る必要はありません。
-
 | キー (Key) | 値 (Value) の説明 |
 | :--- | :--- |
-| **`DISCORD_BOT_TOKEN`** | **ManyBot と同じ** Bot Token |
-| **`DISCORD_CLIENT_ID`** | **ManyBot と同じ** Application (Client) ID |
+| **`DISCORD_BOT_TOKEN`** | Discord Developer Portal で取得した Bot Token |
+| **`DISCORD_CLIENT_ID`** | Discord Application (Client) ID |
 | **`DOUMORI_DATABASE_URL`** | `doumori` Bot専用の Supabase 接続文字列 |
 | **`MANYBOT_DATABASE_URL`** | `manybot` Bot専用の Supabase 接続文字列 (通貨連携用) |
-| `DOUMORI_GUILD_ID` | (任意) どう森の機能を動かすサーバーID。カンマ区切りで複数可。未設定ならどう森サーバー |
+| `DOUMORI_GUILD_ID` | (任意) コマンドを登録するサーバーID。未設定ならどう森サーバー |
 | `PORT` | (任意) ヘルスチェック用Webサーバー。**VPSでは設定不要**（manybotとのポート衝突を避けるため） |
-
-#### ManyBot と同じトークンで動かす仕組み
-
-- 同じアプリに2つのプロセス（ManyBot / どう森BOT）が接続し、どちらにも全イベントが届きます。
-- どう森BOTは `DOUMORI_GUILD_ID` のサーバー**以外では何もしません**（浮上計測・通知・コマンド・ボタンすべて）。
-- どう森のスラッシュコマンドは `DOUMORI_GUILD_ID` のサーバーにだけ、1つずつ追加・更新します（一括上書きしないので ManyBot のコマンドは消えません）。ManyBot 側も、そのサーバーではどう森のコマンドを残して同期します。念のため10分ごとに確認し、消えていたら登録し直します。
-- ManyBot と `DOUMORI_GUILD_ID` を揃えてください（ManyBot の `.env` にも同じ値。未設定なら両方ともどう森サーバー）。
 
 ### 3. pm2 で起動
 

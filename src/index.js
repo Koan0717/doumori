@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 
 import { initDatabase } from "./database/db.js";
 import { deployCommands } from "./utils/deployCommands.js";
-import { DOUMORI_GUILD_IDS, isDoumoriGuild } from "./utils/guildScope.js";
 import { handleVoiceStateUpdate, handleMessageCreate } from "./services/ticketTracker.js";
 
 import { command as fishCmd } from "./commands/fish.js";
@@ -119,25 +118,14 @@ const buttonCommandMap = {
 client.on(Events.ClientReady, async () => {
   console.log(`🟢 Botがログインしました: ${client.user.tag}`);
   
-  console.log(`🍃 どう森の機能を動かすサーバー: ${DOUMORI_GUILD_IDS.join(", ")}`);
-
   // スラッシュコマンド自動登録
   if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_BOT_TOKEN) {
     await deployCommands().catch((err) => console.error("❌ Command deploy error:", err));
-
-    // ManyBot と同じアプリなので、ManyBot 側の同期でどう森のコマンドが消えることがある。
-    // 定期的に確認して、消えていたら登録し直す。
-    setInterval(() => {
-      deployCommands({ quiet: true }).catch((err) => console.error("❌ Command re-check error:", err));
-    }, 10 * 60 * 1000);
   }
 });
 
 // インタラクション受付 (スラッシュコマンド ＆ パネルボタン)
 client.on("interactionCreate", async (interaction) => {
-  // どう森サーバー以外（ManyBot だけが使うサーバー）のインタラクションは ManyBot に任せる
-  if (!isDoumoriGuild(interaction.guildId)) return;
-
   // A. スラッシュコマンド実行
   if (interaction.isChatInputCommand()) {
     const cmd = client.commands.get(interaction.commandName);
@@ -197,13 +185,11 @@ client.on("interactionCreate", async (interaction) => {
 
 // VC監視 (チケット付与)
 client.on("voiceStateUpdate", async (oldState, newState) => {
-  if (!isDoumoriGuild(newState.guild?.id ?? oldState.guild?.id)) return;
   await handleVoiceStateUpdate(oldState, newState).catch((err) => console.error("❌ VC tracker error:", err));
 });
 
 // チャット監視 (チケット付与)
 client.on("messageCreate", async (message) => {
-  if (!isDoumoriGuild(message.guildId)) return;
   await handleMessageCreate(message).catch((err) => console.error("❌ Chat tracker error:", err));
 });
 
