@@ -1,5 +1,6 @@
 import { REST, Routes } from "discord.js";
 import dotenv from "dotenv";
+import { DOUMORI_GUILD_IDS } from "./guildScope.js";
 import { command as fishCmd } from "../commands/fish.js";
 import { command as bugCmd } from "../commands/bug.js";
 import { command as shopCmd } from "../commands/shop.js";
@@ -52,10 +53,16 @@ const commands = [
   ticketRevokeCmd.data.toJSON(),
 ];
 
-export async function deployCommands() {
+/**
+ * どう森のスラッシュコマンドを、どう森サーバーにだけ登録する。
+ *
+ * ManyBot と同じアプリ（トークン）で動かすため、コマンドの「一括上書き(PUT)」は使わない。
+ * 一括上書きすると ManyBot のコマンドまで消えてしまうので、どう森のコマンドを1つずつ
+ * 追加・更新(POST)する。既に同じ内容で登録済みのものは送らない（1日の作成回数制限の節約）。
+ */
+export async function deployCommands({ quiet = false } = {}) {
   const token = process.env.DISCORD_BOT_TOKEN;
   const clientId = process.env.DISCORD_CLIENT_ID;
-  const guildId = process.env.DOUMORI_GUILD_ID || "1526696870724894780";
 
   if (!token || !clientId) {
     console.error("❌ DISCORD_BOT_TOKEN または DISCORD_CLIENT_ID が設定されていません。");
@@ -63,28 +70,65 @@ export async function deployCommands() {
   }
 
   const rest = new REST({ version: "10" }).setToken(token);
+  const doumoriNames = new Set(commands.map((c) => c.name));
 
+  // ① 以前グローバル登録していた どう森コマンドが残っていれば、それだけを個別に削除する
   try {
-    console.log(`🚀 ${commands.length} 個のスラッシュコマンドをどう森ギルドにデプロイ中...`);
-
-    // ① グローバルコマンドからどう森コマンドを削除（他サーバーに表示されないようにする）
-    const globalExisting = await rest.get(Routes.applicationCommands(clientId)).catch(() => []);
-    const doumorNames = commands.map((c) => c.name);
-    const nonDoumorGlobal = Array.isArray(globalExisting)
-      ? globalExisting.filter((c) => !doumorNames.includes(c.name))
-      : [];
-    await rest.put(Routes.applicationCommands(clientId), { body: nonDoumorGlobal });
-    console.log("✅ グローバルからどう森コマンドを削除しました。");
-
-    // ② どう森ギルドにのみコマンドを登録する
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
-    console.log(`✅ どう森ギルド(${guildId})へのコマンド登録が完了しました！`);
+    const globalExisting = await rest.get(Routes.applicationCommands(clientId));
+    for (const c of Array.isArray(globalExisting) ? globalExisting : []) {
+      if (doumoriNames.has(c.name)) {
+        await rest.delete(Routes.applicationCommand(clientId, c.id));
+        console.log(`🧹 グローバルに残っていた /${c.name} を削除しました。`);
+      }
+    }
   } catch (error) {
-    console.error("❌ スラッシュコマンドデプロイエラー:", error);
+    console.error("❌ グローバルコマンドの確認エラー:", error?.message || error);
+  }
+
+  // ② どう森サーバーに、無いもの・内容が変わったものだけ登録する
+  for (const guildId of DOUMORI_GUILD_IDS) {
+    try {
+      const existing = await rest.get(Routes.applicationGuildCommands(clientId, guildId));
+      const byName = new Map((Array.isArray(existing) ? existing : []).map((c) => [c.name, c]));
+      let updated = 0;
+      for (const cmd of commands) {
+        const cur = byName.get(cmd.name);
+        if (cur && sameCommand(cur, cmd)) continue;
+        await rest.post(Routes.applicationGuildCommands(clientId, guildId), { body: cmd });
+        updated++;
+      }
+      if (updated > 0 || !quiet) {
+        console.log(`✅ どう森サーバー(${guildId}) のコマンド: ${commands.length}個中 ${updated}個を登録・更新しました。`);
+      }
+    } catch (error) {
+      console.error(`❌ スラッシュコマンド登録エラー (guild ${guildId}):`, error?.message || error);
+    }
   }
 }
 
-// 直接実行された場合
+/** 登録済みコマンドと同じ内容か（説明とオプションで比較） */
+function sameCommand(current, wanted) {
+  const norm = (opts) =>
+    JSON.stringify(
+      (opts || []).map((o) => ({
+        type: o.type,
+        name: o.name,
+        description: o.description,
+        required: !!o.required,
+        choices: (o.choices || []).map((c) => [c.name, c.value]),
+        options: o.options ? JSON.parse(norm(o.options)) : undefined,
+        min_value: o.min_value,
+        max_value: o.max_value,
+      }))
+    );
+  return (
+    current.description === wanted.description &&
+    String(current.default_member_permissions ?? null) === String(wanted.default_member_permissions ?? null) &&
+    norm(current.options) === norm(wanted.options)
+  );
+}
+
+// 直接実行された場合 (npm run register)
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"))) {
   deployCommands();
 }
