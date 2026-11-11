@@ -17,7 +17,7 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
-    const ranks = await getDoumoriRanksMaster();
+    const ranks = await getDoumoriRanksMaster(guildId);
     const userMiles = await getUserMiles(guildId, userId);
     const currentRank = resolveRankFromMember(interaction.member, userMiles.rank_level);
     const nextRank = ranks.find((r) => r.level === currentRank.level + 1);

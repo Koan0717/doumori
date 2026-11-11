@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import { resolveRankFromMember } from "../config.js";
-import { getUserMiles, doumoriPool, getResidentCardData, getDoumoriRanksMaster } from "../database/db.js";
+import { getUserMiles, doumoriPoolFor, getResidentCardData, getDoumoriRanksMaster } from "../database/db.js";
 import { buildResidentCardEmbed } from "./card.js";
 import { createBaseEmbed } from "../utils/embedBuilder.js";
 
@@ -18,7 +18,7 @@ export const command = {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
-    const ranks = await getDoumoriRanksMaster();
+    const ranks = await getDoumoriRanksMaster(guildId);
     const userMiles = await getUserMiles(guildId, userId);
     const currentRank = resolveRankFromMember(interaction.member, userMiles.rank_level);
     const nextRank = ranks.find((r) => r.level === currentRank.level + 1);
@@ -45,7 +45,7 @@ export const command = {
     }
 
     // ランク昇格処理 (マイルを支払い、現在の階級ミッション回数は新階級用にリセット)
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level, mission_count)
        VALUES ($1, $2, 0, $3, 0)
        ON CONFLICT (guild_id, user_id)

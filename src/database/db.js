@@ -6,14 +6,14 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Doumori専用 Supabase / PostgreSQL DB
-const doumoriDbUrl = process.env.DOUMORI_DATABASE_URL || process.env.DATABASE_URL;
+// 旧: どう森BOT専用 Supabase DB（サーバー専用DBが未登録のときに使う）
+const legacyDoumoriUrl = process.env.DOUMORI_DATABASE_URL || process.env.DATABASE_URL;
 
-// Manybot専用 Supabase / PostgreSQL DB
-const manybotDbUrl = process.env.MANYBOT_DATABASE_URL;
+// ManyBot のマスターDB（ManyBot ダッシュボードの「データベース設定」= guild_databases テーブルがある）
+const manybotMasterUrl = process.env.MANYBOT_DATABASE_URL;
 
-if (!doumoriDbUrl) {
-  console.warn("⚠️ DOUMORI_DATABASE_URL (または DATABASE_URL) が設定されていません。");
+if (!manybotMasterUrl && !legacyDoumoriUrl) {
+  console.warn("⚠️ MANYBOT_DATABASE_URL と DOUMORI_DATABASE_URL のどちらも設定されていません。");
 }
 
 const getSslOption = (url) => {
@@ -24,32 +24,119 @@ const getSslOption = (url) => {
   return false;
 };
 
-export const doumoriPool = new Pool({
-  connectionString: doumoriDbUrl,
-  ssl: getSslOption(doumoriDbUrl),
-  connectionTimeoutMillis: 8000,
-  idleTimeoutMillis: 30000,
-  max: 10,
-});
-
-// Manybot DB接続 (設定されている場合のみ分離接続)
-export const manybotPool = manybotDbUrl
-  ? new Pool({
-      connectionString: manybotDbUrl,
-      ssl: getSslOption(manybotDbUrl),
+/** 接続先URLごとのコネクションプール */
+const pools = new Map();
+function poolForUrl(url) {
+  if (!pools.has(url)) {
+    const pool = new Pool({
+      // ?sslmode=require が付いていると ssl 設定が上書きされて証明書エラーになるので外す（ManyBot と同じ）
+      connectionString: url.replace(/[?&]sslmode=require/, ""),
+      ssl: getSslOption(url),
       connectionTimeoutMillis: 8000,
       idleTimeoutMillis: 30000,
       max: 10,
-    })
-  : doumoriPool;
+    });
+    pool.on("error", (err) => console.error("❌ DB pool error:", err.message));
+    pools.set(url, pool);
+  }
+  return pools.get(url);
+}
+
+const masterPool = manybotMasterUrl ? poolForUrl(manybotMasterUrl) : null;
 
 /**
- * データベースのテーブルスキーマを自動作成・初期化
+ * ManyBot ダッシュボードの「データベース設定」でこのサーバー専用に登録されたDBのURL（無ければ null）。
+ * ダッシュボードで変更されても反映されるよう、60秒だけキャッシュする。
  */
-export async function initDatabase() {
+const guildDbCache = new Map(); // guildId -> { url, at }
+const GUILD_DB_CACHE_MS = 60 * 1000;
+export async function getGuildDbUrl(guildId) {
+  if (!masterPool || !guildId) return null;
+  const key = String(guildId);
+  const hit = guildDbCache.get(key);
+  if (hit && Date.now() - hit.at < GUILD_DB_CACHE_MS) return hit.url;
+  let url = null;
+  try {
+    const res = await masterPool.query("SELECT database_url FROM guild_databases WHERE guild_id = $1", [key]);
+    url = (res.rows[0]?.database_url || "").trim() || null;
+  } catch (err) {
+    // 42P01: guild_databases テーブルが無い（ManyBot ダッシュボード未使用）
+    if (err.code !== "42P01") {
+      console.error("❌ サーバー専用DBの確認エラー:", err.message);
+      // 一時的なエラーなら前回の値を使い続ける
+      if (hit) return hit.url;
+    }
+  }
+  guildDbCache.set(key, { url, at: Date.now() });
+  return url;
+}
+
+export class DoumoriDbNotConfiguredError extends Error {
+  constructor() {
+    super("このサーバーのデータベースが未設定です。ManyBot ダッシュボードの「データベース設定」で登録してください。");
+  }
+}
+
+/** 同じ処理を1回だけ実行する（失敗したら次回やり直す） */
+const onceMap = new Map();
+function once(key, fn) {
+  if (!onceMap.has(key)) {
+    onceMap.set(key, fn().catch((err) => {
+      onceMap.delete(key);
+      throw err;
+    }));
+  }
+  return onceMap.get(key);
+}
+
+/**
+ * このサーバーのどう森データを置くDB。
+ * サーバー専用DBが登録されていればそれ、無ければ旧どう森DB（DOUMORI_DATABASE_URL）。
+ * 初めて使うDBには、どう森のテーブルを自動作成する。
+ */
+export async function doumoriPoolFor(guildId) {
+  const url = (await getGuildDbUrl(guildId)) || legacyDoumoriUrl;
+  if (!url) throw new DoumoriDbNotConfiguredError();
+  const pool = poolForUrl(url);
+  await once(`doumori:${url}`, () => initDoumoriSchema(pool));
+  return pool;
+}
+
+/**
+ * このサーバーの ManyBot 通貨（users テーブル）があるDB。
+ * サーバー専用DBが登録されていればそれ、無ければ ManyBot のマスターDB（ManyBot 本体と同じ選び方）。
+ */
+export async function manybotPoolFor(guildId) {
+  const url = (await getGuildDbUrl(guildId)) || manybotMasterUrl || legacyDoumoriUrl;
+  if (!url) throw new DoumoriDbNotConfiguredError();
+  const pool = poolForUrl(url);
+  await once(`manybot:${url}`, () => initManybotUsersSchema(pool));
+  return pool;
+}
+
+/**
+ * 起動時に、どう森を動かすサーバーのDBへ接続してテーブルを用意しておく
+ */
+export async function initDatabase(guildIds = []) {
+  for (const guildId of guildIds) {
+    try {
+      await doumoriPoolFor(guildId);
+      await manybotPoolFor(guildId);
+      const dedicated = await getGuildDbUrl(guildId);
+      console.log(`✅ サーバー ${guildId}: ${dedicated ? "サーバー専用DB（ManyBot ダッシュボードで登録）" : "旧どう森DB (DOUMORI_DATABASE_URL)"} を使用します。`);
+    } catch (err) {
+      console.error(`❌ サーバー ${guildId} のDB初期化エラー:`, err.message || err);
+    }
+  }
+}
+
+/**
+ * どう森のテーブルを自動作成・初期化（DBごとに1回）
+ */
+async function initDoumoriSchema(pool) {
   let client;
   try {
-    client = await doumoriPool.connect();
+    client = await pool.connect();
     // 1. どうぶつの森Bot専用ユーザーデータ
     await client.query(`
       CREATE TABLE IF NOT EXISTS doumori_users (
@@ -245,16 +332,18 @@ export async function initDatabase() {
     `);
 
     console.log("✅ doumori データベーススキーマ（マイル・3枠ミッション・マスター含む）の初期化が完了しました。");
-  } catch (error) {
-    console.error("❌ doumori データベース初期化エラー:", error);
   } finally {
     if (client) client.release();
   }
+}
 
-  // Manybot DB側にも users テーブルの全カラム確保
+/**
+ * ManyBot の users テーブル（通貨）の全カラムを確保（DBごとに1回）
+ */
+async function initManybotUsersSchema(pool) {
   let mbClient;
   try {
-    mbClient = await manybotPool.connect();
+    mbClient = await pool.connect();
 
     // テーブル作成
     await mbClient.query(`
@@ -299,8 +388,6 @@ export async function initDatabase() {
     }
 
     console.log("✅ manybot データベース（usersテーブル・完全全カラム）の確認・補強が完了しました。");
-  } catch (err) {
-    console.error("❌ manybot DB初期化確認エラー:", err);
   } finally {
     if (mbClient) mbClient.release();
   }
@@ -310,12 +397,12 @@ export async function initDatabase() {
  * Doumoriユーザー情報の取得または初期化
  */
 export async function getUser(guildId, userId) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     "SELECT * FROM doumori_users WHERE guild_id = $1 AND user_id = $2",
     [guildId, userId]
   );
   if (res.rows.length === 0) {
-    const insertRes = await doumoriPool.query(
+    const insertRes = await (await doumoriPoolFor(guildId)).query(
       "INSERT INTO doumori_users (guild_id, user_id) VALUES ($1, $2) RETURNING *",
       [guildId, userId]
     );
@@ -328,12 +415,12 @@ export async function getUser(guildId, userId) {
  * マイルポイント & ランクデータの取得または初期化
  */
 export async function getUserMiles(guildId, userId) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     "SELECT * FROM doumori_miles WHERE guild_id = $1 AND user_id = $2",
     [guildId, userId]
   );
   if (res.rows.length === 0) {
-    const insertRes = await doumoriPool.query(
+    const insertRes = await (await doumoriPoolFor(guildId)).query(
       "INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level) VALUES ($1, $2, 0, 1) RETURNING *",
       [guildId, userId]
     );
@@ -346,7 +433,7 @@ export async function getUserMiles(guildId, userId) {
  * マイルポイントの加算/消費
  */
 export async function addMiles(guildId, userId, amount) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_miles (guild_id, user_id, miles)
      VALUES ($1, $2, $3)
      ON CONFLICT (guild_id, user_id)
@@ -361,7 +448,7 @@ export async function addMiles(guildId, userId, amount) {
  * ランクレベルの設定
  */
 export async function setRankLevel(guildId, userId, newRankLevel) {
-  await doumoriPool.query(
+  await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_miles (guild_id, user_id, rank_level)
      VALUES ($1, $2, $3)
      ON CONFLICT (guild_id, user_id)
@@ -374,7 +461,7 @@ export async function setRankLevel(guildId, userId, newRankLevel) {
  * DIY作業台（イベント）最終実行日時の更新
  */
 export async function updateLastDiyAt(guildId, userId) {
-  await doumoriPool.query(
+  await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_miles (guild_id, user_id, last_diy_at)
      VALUES ($1, $2, CURRENT_TIMESTAMP)
      ON CONFLICT (guild_id, user_id)
@@ -386,9 +473,9 @@ export async function updateLastDiyAt(guildId, userId) {
 /**
  * 階級・ランクマスター一覧の取得（DBを優先、無ければCONFIGフォールバック）
  */
-export async function getDoumoriRanksMaster() {
+export async function getDoumoriRanksMaster(guildId) {
   try {
-    const res = await doumoriPool.query(
+    const res = await (await doumoriPoolFor(guildId)).query(
       "SELECT level, name, required_miles, color, role_name FROM doumori_ranks_master ORDER BY level ASC"
     );
     if (res.rows.length > 0) {
@@ -409,9 +496,9 @@ export async function getDoumoriRanksMaster() {
 /**
  * 階級・ランクマスターの保存・更新
  */
-export async function saveDoumoriRankMaster(level, rankData) {
+export async function saveDoumoriRankMaster(guildId, level, rankData) {
   const { name, requiredMiles, color, roleName } = rankData;
-  await doumoriPool.query(
+  await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_ranks_master (level, name, required_miles, color, role_name, updated_at)
      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
      ON CONFLICT (level)
@@ -431,7 +518,7 @@ export async function saveDoumoriRankMaster(level, rankData) {
  */
 export async function getMissionsMaster(guildId = 0) {
   if (guildId && guildId !== 0 && guildId !== "0") {
-    const customRes = await doumoriPool.query(
+    const customRes = await (await doumoriPoolFor(guildId)).query(
       `SELECT * FROM doumori_missions_master
        WHERE guild_id = $1
        ORDER BY is_active DESC, id ASC`,
@@ -442,7 +529,7 @@ export async function getMissionsMaster(guildId = 0) {
     }
   }
 
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `SELECT * FROM doumori_missions_master
      WHERE guild_id = 0 OR guild_id IS NULL
      ORDER BY is_active DESC, id ASC`
@@ -455,7 +542,7 @@ export async function getMissionsMaster(guildId = 0) {
  */
 export async function createMissionMaster(guildId, data) {
   const { title, description, target_rank = 0, reward_miles = 100 } = data;
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_missions_master (guild_id, title, description, target_rank, reward_miles, is_active)
      VALUES ($1, $2, $3, $4, $5, TRUE)
      RETURNING *`,
@@ -467,9 +554,9 @@ export async function createMissionMaster(guildId, data) {
 /**
  * ミッションマスターの更新
  */
-export async function updateMissionMaster(id, data) {
+export async function updateMissionMaster(guildId, id, data) {
   const { title, description, target_rank, reward_miles, is_active } = data;
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `UPDATE doumori_missions_master
      SET title = COALESCE($1, title),
          description = COALESCE($2, description),
@@ -487,8 +574,8 @@ export async function updateMissionMaster(id, data) {
 /**
  * ミッションマスターの削除
  */
-export async function deleteMissionMaster(id) {
-  await doumoriPool.query("DELETE FROM doumori_missions_master WHERE id = $1", [id]);
+export async function deleteMissionMaster(guildId, id) {
+  await (await doumoriPoolFor(guildId)).query("DELETE FROM doumori_missions_master WHERE id = $1", [id]);
 }
 
 /**
@@ -496,7 +583,7 @@ export async function deleteMissionMaster(id) {
  */
 export async function getDailyMissionSlotCount(guildId) {
   try {
-    const res = await doumoriPool.query(
+    const res = await (await doumoriPoolFor(guildId)).query(
       "SELECT setting_value FROM doumori_settings WHERE (guild_id = $1 OR guild_id = 0) AND setting_key = 'daily_mission_slot_count' ORDER BY guild_id DESC LIMIT 1",
       [guildId]
     );
@@ -527,7 +614,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   try {
     // サーバー固有の有効ミッションをまず検索
     if (guildId && guildId !== 0 && guildId !== "0") {
-      const customRankRes = await doumoriPool.query(
+      const customRankRes = await (await doumoriPoolFor(guildId)).query(
         `SELECT * FROM doumori_missions_master
          WHERE guild_id = $1 AND is_active = TRUE AND (target_rank = 0 OR target_rank = $2)
          ORDER BY id ASC`,
@@ -537,7 +624,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
         masterPoolRows = customRankRes.rows;
       } else {
         // ランク指定なしでもサーバー専用ミッションがあるか確認
-        const customAllRes = await doumoriPool.query(
+        const customAllRes = await (await doumoriPoolFor(guildId)).query(
           `SELECT * FROM doumori_missions_master
            WHERE guild_id = $1 AND is_active = TRUE
            ORDER BY id ASC`,
@@ -551,7 +638,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
 
     // サーバー専用が未設定の場合は guild_id = 0 の共通ミッションを使用
     if (masterPoolRows.length === 0) {
-      const globalRes = await doumoriPool.query(
+      const globalRes = await (await doumoriPoolFor(guildId)).query(
         `SELECT * FROM doumori_missions_master
          WHERE (guild_id = 0 OR guild_id IS NULL) AND is_active = TRUE AND (target_rank = 0 OR target_rank = $1)
          ORDER BY id ASC`,
@@ -583,7 +670,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   const targetSlotCount = Math.max(1, Math.min(configuredSlotCount, masterPoolRows.length));
 
   // 2. 本日の既存デイリーミッションを取得
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `SELECT * FROM doumori_daily_missions
      WHERE guild_id = $1 AND user_id = $2 AND date_key = $3
      ORDER BY mission_slot ASC`,
@@ -613,7 +700,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
 
   if (shouldRefresh) {
     // 枠数超過のpendingスロットを削除
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `DELETE FROM doumori_daily_missions
        WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot > $4 AND status = 'pending'`,
       [guildId, userId, todayStr, targetSlotCount]
@@ -621,7 +708,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
 
     // 無効化・更新された古いpendingスロットを削除
     if (hasOutdatedPending || currentRows.length < targetSlotCount) {
-      await doumoriPool.query(
+      await (await doumoriPoolFor(guildId)).query(
         `DELETE FROM doumori_daily_missions
          WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status = 'pending'`,
         [guildId, userId, todayStr]
@@ -630,7 +717,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   }
 
   // 3. クリーンアップ後の最新スロット状況を取得
-  const checkRes = await doumoriPool.query(
+  const checkRes = await (await doumoriPoolFor(guildId)).query(
     `SELECT * FROM doumori_daily_missions
      WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot <= $4
      ORDER BY mission_slot ASC`,
@@ -665,7 +752,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     const mId = selected.id || null;
 
     try {
-      await doumoriPool.query(
+      await (await doumoriPoolFor(guildId)).query(
         `INSERT INTO doumori_daily_missions (guild_id, user_id, date_key, mission_slot, mission_id, mission_title, mission_desc, reward_miles, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
          ON CONFLICT DO NOTHING`,
@@ -676,7 +763,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
     }
 
     if (mId) {
-      await doumoriPool.query(
+      await (await doumoriPoolFor(guildId)).query(
         "UPDATE doumori_missions_master SET times_assigned = times_assigned + 1 WHERE id = $1",
         [mId]
       ).catch(() => {});
@@ -684,7 +771,7 @@ export async function getOrCreateDailyMissions(guildId, userId, rankLevel = 1) {
   }
 
   // 4. 最終結果をスロット順、targetSlotCount 上限で返却
-  const finalRes = await doumoriPool.query(
+  const finalRes = await (await doumoriPoolFor(guildId)).query(
     `SELECT * FROM doumori_daily_missions
      WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot <= $4
      ORDER BY mission_slot ASC`,
@@ -707,7 +794,7 @@ export async function getOrCreateDailyMission(guildId, userId, rankLevel) {
  */
 export async function submitMissionReportSlot(guildId, userId, dateKey, slot = 0, proofUrl = "") {
   if (slot > 0) {
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `UPDATE doumori_daily_missions
        SET status = 'submitted', proof_url = $1
        WHERE guild_id = $2 AND user_id = $3 AND date_key = $4 AND mission_slot = $5 AND status = 'pending'`,
@@ -715,7 +802,7 @@ export async function submitMissionReportSlot(guildId, userId, dateKey, slot = 0
     );
   } else {
     // 全スロット
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `UPDATE doumori_daily_missions
        SET status = 'submitted', proof_url = $1
        WHERE guild_id = $2 AND user_id = $3 AND date_key = $4 AND status = 'pending'`,
@@ -765,7 +852,7 @@ export async function approveMissionSlot(guildId, userId, dateKey, slot = 0, sta
     : "SELECT * FROM doumori_daily_missions WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND status != 'approved'";
   const params = slot > 0 ? [guildId, userId, dateKey, slot] : [guildId, userId, dateKey];
 
-  const res = await doumoriPool.query(queryStr, params);
+  const res = await (await doumoriPoolFor(guildId)).query(queryStr, params);
 
   if (res.rows.length === 0) {
     return null;
@@ -782,21 +869,21 @@ export async function approveMissionSlot(guildId, userId, dateKey, slot = 0, sta
     approvedMissions.push(m);
 
     // ステータスを達成済みに更新
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       "UPDATE doumori_daily_missions SET status = 'approved' WHERE guild_id = $1 AND user_id = $2 AND date_key = $3 AND mission_slot = $4",
       [guildId, userId, dateKey, m.mission_slot]
     );
 
     // ミッションマスターの達成統計を加算
     if (m.mission_id) {
-      await doumoriPool.query(
+      await (await doumoriPoolFor(guildId)).query(
         "UPDATE doumori_missions_master SET times_completed = times_completed + 1 WHERE id = $1",
         [m.mission_id]
       ).catch(() => {});
     }
 
     // 処理履歴（ログ）をDBに保存
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `INSERT INTO doumori_mission_logs (guild_id, user_id, staff_id, mission_desc, reward_miles, mission_count)
        VALUES ($1, $2, $3, $4, $5, 1)`,
       [guildId, userId, staffId, m.mission_desc || m.mission_title, miles]
@@ -804,7 +891,7 @@ export async function approveMissionSlot(guildId, userId, dateKey, slot = 0, sta
   }
 
   // マイル加算 ＆ 階級ミッション回数 ＆ 累計ミッション回数の加算
-  const updateRes = await doumoriPool.query(
+  const updateRes = await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_miles (guild_id, user_id, miles, rank_level, mission_count, total_mission_count)
      VALUES ($1, $2, $3, 1, $4, $4)
      ON CONFLICT (guild_id, user_id)
@@ -844,7 +931,7 @@ export async function approveMissionReport(guildId, userId, dateKey, staffId = n
  */
 export async function adminAddMiles(guildId, userId, amount, adminId, reason = "") {
   const newMiles = await addMiles(guildId, userId, amount);
-  await doumoriPool.query(
+  await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_mile_logs (guild_id, user_id, admin_id, amount, action, reason)
      VALUES ($1, $2, $3, $4, 'grant', $5)`,
     [guildId, userId, adminId, amount, reason]
@@ -860,7 +947,7 @@ export async function adminRemoveMiles(guildId, userId, amount, adminId, reason 
   const actualDeduct = Math.min(currentData.miles, amount);
   const newMiles = await addMiles(guildId, userId, -actualDeduct);
 
-  await doumoriPool.query(
+  await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_mile_logs (guild_id, user_id, admin_id, amount, action, reason)
      VALUES ($1, $2, $3, $4, 'revoke', $5)`,
     [guildId, userId, adminId, actualDeduct, reason]
@@ -912,7 +999,7 @@ export async function buyTicketsWithMiles(guildId, userId, ticketCount = 1) {
  * manybot DBの balance (通貨) を取得
  */
 export async function getManybotBalance(guildId, userId) {
-  const res = await manybotPool.query(
+  const res = await (await manybotPoolFor(guildId)).query(
     "SELECT balance FROM users WHERE guild_id = $1 AND user_id = $2",
     [guildId, userId]
   );
@@ -926,7 +1013,7 @@ export async function getManybotBalance(guildId, userId) {
  * manybot DBの balance (通貨) を更新・加算
  */
 export async function addManybotBalance(guildId, userId, amount) {
-  await manybotPool.query(
+  await (await manybotPoolFor(guildId)).query(
     `INSERT INTO users (guild_id, user_id, balance)
      VALUES ($1, $2, $3)
      ON CONFLICT (guild_id, user_id)
@@ -939,7 +1026,7 @@ export async function addManybotBalance(guildId, userId, amount) {
  * チケットの変更
  */
 export async function addTickets(guildId, userId, amount) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_users (guild_id, user_id, tickets)
      VALUES ($1, $2, $3)
      ON CONFLICT (guild_id, user_id)
@@ -954,7 +1041,7 @@ export async function addTickets(guildId, userId, amount) {
  * インベントリ内の道具数を取得
  */
 export async function getItemCount(guildId, userId, itemId) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     "SELECT quantity FROM doumori_inventory WHERE guild_id = $1 AND user_id = $2 AND item_id = $3",
     [guildId, userId, itemId]
   );
@@ -966,7 +1053,7 @@ export async function getItemCount(guildId, userId, itemId) {
  * インベントリの道具数を加算/消費
  */
 export async function addInventoryItem(guildId, userId, itemId, amount) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `INSERT INTO doumori_inventory (guild_id, user_id, item_id, quantity)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (guild_id, user_id, item_id)
@@ -981,7 +1068,7 @@ export async function addInventoryItem(guildId, userId, itemId, amount) {
  * 生き物捕獲記録を追加 / 更新
  */
 export async function recordCatch(guildId, userId, category, creatureId, isShiny) {
-  const check = await doumoriPool.query(
+  const check = await (await doumoriPoolFor(guildId)).query(
     "SELECT * FROM doumori_collection WHERE guild_id = $1 AND user_id = $2 AND category = $3 AND creature_id = $4",
     [guildId, userId, category, creatureId]
   );
@@ -989,7 +1076,7 @@ export async function recordCatch(guildId, userId, category, creatureId, isShiny
   let isFirstTime = false;
   if (check.rows.length === 0) {
     isFirstTime = true;
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `INSERT INTO doumori_collection (guild_id, user_id, category, creature_id, count, has_shiny)
        VALUES ($1, $2, $3, $4, 1, $5)`,
       [guildId, userId, category, creatureId, isShiny]
@@ -997,7 +1084,7 @@ export async function recordCatch(guildId, userId, category, creatureId, isShiny
   } else {
     const currentShiny = check.rows[0].has_shiny;
     const newShiny = currentShiny || isShiny;
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `UPDATE doumori_collection
        SET count = count + 1, has_shiny = $1
        WHERE guild_id = $2 AND user_id = $3 AND category = $4 AND creature_id = $5`,
@@ -1012,7 +1099,7 @@ export async function recordCatch(guildId, userId, category, creatureId, isShiny
  * コレクション (図鑑データ) 一覧の取得
  */
 export async function getUserCollection(guildId, userId, category) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     "SELECT * FROM doumori_collection WHERE guild_id = $1 AND user_id = $2 AND category = $3",
     [guildId, userId, category]
   );
@@ -1023,7 +1110,7 @@ export async function getUserCollection(guildId, userId, category) {
  * 収集率ランキングの取得
  */
 export async function getLeaderboard(guildId, totalCount) {
-  const res = await doumoriPool.query(
+  const res = await (await doumoriPoolFor(guildId)).query(
     `SELECT user_id, COUNT(DISTINCT creature_id) as caught_types
      FROM doumori_collection
      WHERE guild_id = $1
@@ -1040,7 +1127,7 @@ export async function getLeaderboard(guildId, totalCount) {
  */
 export async function getDoumoriSettings(guildId) {
   try {
-    const res = await doumoriPool.query(
+    const res = await (await doumoriPoolFor(guildId)).query(
       "SELECT setting_key, setting_value FROM doumori_settings WHERE guild_id = $1",
       [guildId]
     );
@@ -1064,7 +1151,7 @@ export async function getDoumoriSettings(guildId) {
 export async function saveDoumoriSettings(guildId, settingsObj) {
   for (const [key, value] of Object.entries(settingsObj)) {
     const strVal = typeof value === "object" ? JSON.stringify(value) : String(value);
-    await doumoriPool.query(
+    await (await doumoriPoolFor(guildId)).query(
       `INSERT INTO doumori_settings (guild_id, setting_key, setting_value)
        VALUES ($1, $2, $3)
        ON CONFLICT (guild_id, setting_key)

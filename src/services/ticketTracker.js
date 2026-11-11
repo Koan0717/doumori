@@ -1,5 +1,5 @@
 import { CONFIG } from "../config.js";
-import { doumoriPool, addTickets, getDoumoriSettings } from "../database/db.js";
+import { doumoriPoolFor, addTickets, getDoumoriSettings } from "../database/db.js";
 
 // VC参加開始時間のメモリキャッシュ Map<`${guildId}_${userId}`, timestamp>
 const vcStateMap = new Map();
@@ -79,7 +79,7 @@ export async function handleMessageCreate(message) {
  */
 async function processUserActivityTime(guildId, userId, seconds, member, channel = null) {
   try {
-    const res = await doumoriPool.query(
+    const res = await (await doumoriPoolFor(guildId)).query(
       `INSERT INTO doumori_users (guild_id, user_id, vc_total_seconds, vc_unclaimed_seconds)
        VALUES ($1, $2, $3, $3)
        ON CONFLICT (guild_id, user_id)
@@ -102,7 +102,7 @@ async function processUserActivityTime(guildId, userId, seconds, member, channel
       const remainSec = unclaimed % reqSec;
 
       // 未換算秒数を更新
-      await doumoriPool.query(
+      await (await doumoriPoolFor(guildId)).query(
         "UPDATE doumori_users SET vc_unclaimed_seconds = $1 WHERE guild_id = $2 AND user_id = $3",
         [remainSec, guildId, userId]
       );
